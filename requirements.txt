@@ -14,3 +14,8 @@ python-multipart==0.0.6
 streamlit==1.29.0
 prometheus-client==0.19.0
 mlflow==2.8.0
+pdfplumber==0.10.3
+python-docx==0.8.11
+python-json-logger==2.0.7
+psycopg2-binary==2.9.9
+Pillow==10.1.0
