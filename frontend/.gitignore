@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Production build outputs
+.next/
+out/
+build/
+dist/
+
+# Testing and automation artifacts
+test-results/
+coverage/
+.playwright/
+playwright-report/
+blob-report/
+
+# Debug and runtime logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files
+.env
+.env*.local
+
+# Cache and temporary files
+.turbo/
+.eslintcache
+*.tsbuildinfo
+next-env.d.ts
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

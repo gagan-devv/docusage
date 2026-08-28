@@ -1,38 +1,80 @@
-version: "3.8"
 services:
   backend:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - ./data:/app/data
     depends_on:
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   celery:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: celery -A src.backend.worker.celery_app worker --loglevel=info
     env_file:
       - .env
+    volumes:
+      - ./data:/app/data
     depends_on:
-      - redis
-      - postgres
-  
-  redis:
-    image: redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
-      - "6379:6379"
-  
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
   postgres:
     image: ankane/pgvector:latest
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-docusage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yourpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-docusage}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-  
+      - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docusage} -d ${POSTGRES_DB:-docusage}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "${REDIS_PORT_HOST:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-data:
