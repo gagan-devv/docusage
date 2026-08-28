@@ -7,29 +7,33 @@ def read_pdf(file_path: str) -> str:
     text = ""
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
-            text += page.extract_text() + "\n"
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
     return text
 
-def read_pdf_with_tables(file_path: str) -> str:
+def read_pdf_with_tables(file_path: str) -> dict:
     result = {"text": "", "tables": []}
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
-            result["text"] += page.extract_text() + "\n"
+            extracted = page.extract_text()
+            if extracted:
+                result["text"] += extracted + "\n"
             for table in page.extract_tables():
                 result["tables"].append(table)
-    return text
+    return result
 
 def read_docx(file_path: str) -> str:
     doc = Document(file_path)
     return "\n".join([p.text for p in doc.paragraphs])
 
 def read_txt(file_path: str) -> str:
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
     
 def process_uploaded_file(
     file_path: str,
-    extract_table: bool = false
+    extract_table: bool = False
 ) -> Union[str, dict]:
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File {file_path} doesn't exist.")

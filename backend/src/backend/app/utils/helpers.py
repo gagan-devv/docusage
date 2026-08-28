@@ -2,9 +2,9 @@ from typing import List, Dict, Any
 import re
 
 def clean_text(text: str) -> str:
-    """Clean and normalize text (e.g., remove extra whitespace, special chars)."""
-    text = re.sub(r'\s+', ' ', text)
+    """Clean and normalize text (strip non-word chars, collapse whitespace, strip boundaries)."""
     text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 def validate_contract_metadata(metadata: Dict[str, Any]) -> bool:

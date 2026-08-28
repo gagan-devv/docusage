@@ -13,3 +13,10 @@ class ContractResponse(BaseModel):
     file_path: str
     metadata: Dict[str, Any]
     created_at: datetime
+
+class EvalResponse(BaseModel):
+    id: int
+    contract_id: int
+    metric_name: str
+    value: float
+    timestamp: datetime
