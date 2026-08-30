@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from src.backend.app.services.contracts import save_contract, get_contract
 from src.backend.app.models.contracts import ContractCreate, ContractResponse, EvalResponse
-from typing import List
+from typing import List, Optional, Literal
 import uuid
 import os
 
@@ -20,7 +20,8 @@ async def upload_contract(file: UploadFile = File(...)):
     contract = await save_contract(
         name=file.filename,
         file_path=file_path,
-        metadata={'size': file.size}
+        metadata={'size': file.size},
+        contract_id=contract_id
     )
     # ponytail: try celery task first, silent fallback if worker offline
     try:
@@ -52,19 +53,19 @@ async def get_task_status(task_id: str):
         return {"task_id": task_id, "status": "UNKNOWN", "error": str(e)}
 
 @router.get("/{contract_id}", response_model=ContractResponse)
-async def get_contract_by_id(contract_id: int):
+async def get_contract_by_id(contract_id: str):
     contract = await get_contract(contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     return contract
 
 @router.get("/{contract_id}/evals", response_model=List[EvalResponse])
-async def get_evals_for_contract(contract_id: int):
+async def get_evals_for_contract(contract_id: str):
     from src.backend.app.services.contracts import get_contract_evals
     return await get_contract_evals(contract_id)
 
 @router.delete("/{contract_id}", status_code=204)
-async def remove_contract(contract_id: int):
+async def remove_contract(contract_id: str):
     from src.backend.app.services.contracts import delete_contract
     deleted = await delete_contract(contract_id)
     if not deleted:
@@ -72,7 +73,6 @@ async def remove_contract(contract_id: int):
     return None
 
 from pydantic import BaseModel
-from typing import Optional, Literal
 from src.backend.agents.analyzer import ContractAnalysisEngine
 
 engine = ContractAnalysisEngine()
@@ -82,7 +82,7 @@ class HumanReviewRequest(BaseModel):
     feedback: Optional[str] = None
 
 @router.post("/{contract_id}/graph/start/{policy_id}")
-async def start_graph_analysis(contract_id: int, policy_id: int, thread_id: Optional[str] = None):
+async def start_graph_analysis(contract_id: str, policy_id: int, thread_id: Optional[str] = None):
     session_id = thread_id or f"contract-{contract_id}-policy-{policy_id}-{uuid.uuid4().hex[:6]}"
     result = engine.start_review(contract_id=contract_id, policy_id=policy_id, thread_id=session_id)
     return result
@@ -103,8 +103,7 @@ async def submit_graph_review(thread_id: str, review: HumanReviewRequest):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/{contract_id}/analyze/{policy_id}")
-async def analyze_contract(contract_id: int, policy_id: int):
-    # Convenience wrapper running graph directly
+async def analyze_contract(contract_id: str, policy_id: int):
     session_id = f"sync-{contract_id}-{policy_id}-{uuid.uuid4().hex[:6]}"
     result = engine.start_review(contract_id=contract_id, policy_id=policy_id, thread_id=session_id)
     return result

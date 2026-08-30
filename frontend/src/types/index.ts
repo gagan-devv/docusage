@@ -1,5 +1,5 @@
 export interface Contract {
-  id: number;
+  id: string | number;
   name: string;
   file_path: string;
   metadata: Record<string, any>;
@@ -20,7 +20,7 @@ export interface Policy {
 
 export interface EvalItem {
   id: number;
-  contract_id: number;
+  contract_id: string | number;
   metric_name: string;
   value: number;
   timestamp: string;
@@ -38,7 +38,7 @@ export interface GraphDeviation {
 }
 
 export interface GraphState {
-  contract_id: number;
+  contract_id: string | number;
   policy_id: number;
   thread_id: string;
   rules: PolicyRule[];
@@ -57,4 +57,30 @@ export interface AnalysisSession {
   is_interrupted: boolean;
   next_step: string[];
   state: GraphState;
+}
+
+export interface ModelProvider {
+  id: string;
+  name: string;
+  requires_api_key: boolean;
+  llm_models: string[];
+  embedding_models: string[];
+}
+
+export interface UserSetting {
+  id: number;
+  provider: string;
+  selected_llm: string;
+  selected_embedding: string;
+  api_key_masked?: string;
+  has_api_key: boolean;
+  ollama_base_url?: string;
+  is_active: boolean;
+  updated_at?: string | null;
+}
+
+export interface OllamaModelTag {
+  name: string;
+  size?: number;
+  digest?: string;
 }

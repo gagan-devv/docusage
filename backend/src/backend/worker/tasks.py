@@ -5,7 +5,9 @@ from src.backend.app.services.rag import generate_embeddings
 from src.backend.app.utils.db import get_db_connection, release_db_connection
 import json
 
-def ingest_contract(contract_id: int, file_path: str) -> int:
+from typing import Any
+
+def ingest_contract(contract_id: Any, file_path: str) -> int:
     """Extract text, chunk, embed, and store clauses in DB."""
     # ponytail: naive file parser dispatch, OCR pipeline if scanned PDFs matter
     content = process_uploaded_file(file_path)
@@ -31,5 +33,5 @@ def ingest_contract(contract_id: int, file_path: str) -> int:
         release_db_connection(conn)
 
 @celery_app.task
-def ingest_contract_task(contract_id: int, file_path: str) -> int:
+def ingest_contract_task(contract_id: Any, file_path: str) -> int:
     return ingest_contract(contract_id, file_path)

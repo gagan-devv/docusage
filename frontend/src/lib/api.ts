@@ -1,4 +1,4 @@
-import { Contract, Policy, PolicyRule, EvalItem, AnalysisSession } from "@/types";
+import { Contract, Policy, PolicyRule, EvalItem, AnalysisSession, ModelProvider, UserSetting, OllamaModelTag } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -38,7 +38,7 @@ export const api = {
     return fetchJson(`/contracts/?skip=${skip}&limit=${limit}`);
   },
 
-  async getContract(id: number): Promise<Contract> {
+  async getContract(id: string | number): Promise<Contract> {
     return fetchJson(`/contracts/${id}`);
   },
 
@@ -55,7 +55,7 @@ export const api = {
     return response.json();
   },
 
-  async deleteContract(id: number): Promise<void> {
+  async deleteContract(id: string | number): Promise<void> {
     return fetchJson(`/contracts/${id}`, { method: "DELETE" });
   },
 
@@ -84,7 +84,7 @@ export const api = {
   },
 
   // LangGraph AI Analysis & HITL
-  async startAnalysis(contractId: number, policyId: number, threadId?: string): Promise<AnalysisSession> {
+  async startAnalysis(contractId: string | number, policyId: number, threadId?: string): Promise<AnalysisSession> {
     const path = `/contracts/${contractId}/graph/start/${policyId}${threadId ? `?thread_id=${threadId}` : ""}`;
     return fetchJson(path, { method: "POST" });
   },
@@ -107,5 +107,31 @@ export const api = {
   // Evals
   async getContractEvals(contractId: number): Promise<EvalItem[]> {
     return fetchJson(`/contracts/${contractId}/evals`);
+  },
+
+  // Settings & Model Providers
+  async getProviders(): Promise<{ providers: ModelProvider[] }> {
+    return fetchJson("/settings/providers");
+  },
+
+  async getOllamaModels(baseUrl?: string): Promise<{ base_url: string; connected: boolean; models: OllamaModelTag[] }> {
+    return fetchJson(`/settings/ollama/models${baseUrl ? `?url=${encodeURIComponent(baseUrl)}` : ""}`);
+  },
+
+  async getSettings(): Promise<UserSetting> {
+    return fetchJson("/settings/");
+  },
+
+  async saveSettings(data: {
+    provider: string;
+    selected_llm: string;
+    selected_embedding: string;
+    api_key?: string;
+    ollama_base_url?: string;
+  }): Promise<UserSetting> {
+    return fetchJson("/settings/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 };

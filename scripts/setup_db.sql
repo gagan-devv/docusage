@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS contracts (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     file_path VARCHAR(255) NOT NULL,
     metadata JSONB,
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS contracts (
 
 CREATE TABLE IF NOT EXISTS clauses (
     id SERIAL PRIMARY KEY,
-    contract_id INTEGER REFERENCES contracts(id),
+    contract_id UUID REFERENCES contracts(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     clause_type VARCHAR(100),
     entities JSONB,
@@ -25,10 +25,21 @@ CREATE TABLE IF NOT EXISTS policies (
 
 CREATE TABLE IF NOT EXISTS evals (
     id SERIAL PRIMARY KEY,
-    contract_id INTEGER REFERENCES contracts(id),
+    contract_id UUID REFERENCES contracts(id) ON DELETE CASCADE,
     metric_name VARCHAR(100) NOT NULL,
     value FLOAT NOT NULL,
     timestamp TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+    id SERIAL PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL UNIQUE,
+    selected_llm VARCHAR(100) NOT NULL,
+    selected_embedding VARCHAR(100) NOT NULL,
+    encrypted_api_key TEXT,
+    ollama_base_url VARCHAR(255) DEFAULT 'http://localhost:11434',
+    is_active BOOLEAN DEFAULT TRUE,
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Seed default enterprise policy if not present

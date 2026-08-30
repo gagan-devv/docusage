@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, Union
 from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -9,7 +9,7 @@ from src.backend.app.utils.tracking import track_contract_evaluation
 
 
 class ContractAnalysisState(TypedDict):
-    contract_id: int
+    contract_id: Any
     policy_id: int
     thread_id: str
     rules: List[Dict[str, Any]]

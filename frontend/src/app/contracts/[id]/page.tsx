@@ -14,7 +14,7 @@ import Link from "next/link";
 export default function ContractReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const contractId = Number(params.id) || 1;
+  const contractId = (params?.id as string) || "1";
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [policy, setPolicy] = useState<Policy | null>(null);

@@ -10,7 +10,7 @@ _model: Optional[SentenceTransformer] = None
 def get_embedding_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+        _model = SentenceTransformer(settings.embedding_model_name)
     return _model
 
 def chunk_contract(file_path: str, chunk_size: int = 512) -> List[str]:
@@ -30,8 +30,10 @@ def generate_embeddings(chunks: List[str]) -> List[List[float]]:
     model = get_embedding_model()
     return model.encode(chunks).tolist()
 
+from typing import List, Optional, Any
+
 @rag_search_duration_seconds.time()
-def retrieve_relevant_clauses(query: str, contract_id: int, top_k: int = 3) -> List[str]:
+def retrieve_relevant_clauses(query: str, contract_id: Any, top_k: int = 3) -> List[str]:
     conn = None
     try:
         conn = get_db_connection()

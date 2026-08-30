@@ -45,9 +45,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from src.backend.app.routes.settings import router as settings_router
+
 app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(metrics_router)
 app.include_router(policies_router, prefix="/policies", tags=["policies"])
+app.include_router(settings_router, prefix="/settings", tags=["settings"])
 
 @app.get("/health", tags=["system"])
 async def health_check():

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from datetime import datetime
 
 class ContractCreate(BaseModel):
@@ -8,7 +8,7 @@ class ContractCreate(BaseModel):
     metadata: Dict[str, Any]
 
 class ContractResponse(BaseModel):
-    id: int
+    id: Union[str, int]
     name: str
     file_path: str
     metadata: Dict[str, Any]
@@ -16,7 +16,7 @@ class ContractResponse(BaseModel):
 
 class EvalResponse(BaseModel):
     id: int
-    contract_id: int
+    contract_id: Union[str, int]
     metric_name: str
     value: float
     timestamp: datetime

@@ -8,7 +8,7 @@ import { FileText, ArrowRight, Trash2, Shield } from "lucide-react";
 
 interface ContractTableProps {
   contracts: Contract[];
-  onDeleteContract?: (id: number) => void;
+  onDeleteContract?: (id: string | number) => void;
   isLoading?: boolean;
 }
 
@@ -59,7 +59,7 @@ export const ContractTable: React.FC<ContractTableProps> = ({
                 </div>
               </td>
               <td className="py-3 px-4 text-zinc-400 font-mono text-[11px] hidden md:table-cell">
-                <span className="truncate max-w-xs block text-zinc-500">#{c.id} • {c.file_path}</span>
+                <span className="truncate max-w-xs block text-zinc-500">#{typeof c.id === 'string' && c.id.length > 12 ? c.id.substring(0, 8) + '...' : c.id} • {c.file_path}</span>
               </td>
               <td className="py-3 px-4 text-zinc-400 hidden sm:table-cell font-mono text-[11px]">
                 {formatDate(c.created_at)}

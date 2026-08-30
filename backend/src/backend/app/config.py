@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str = Field(default="http://localhost:5000", validation_alias="MLFLOW_TRACKING_URI")
     mlflow_experiment_name: str = Field(default="docusage-contract-analysis", validation_alias="MLFLOW_EXPERIMENT_NAME")
     mlflow_enabled: bool = Field(default=True, validation_alias="MLFLOW_ENABLED")
+    embedding_model_name: str = Field(default="sentence-transformers/all-mpnet-base-v2", validation_alias="EMBEDDING_MODEL_NAME")
 
     model_config = SettingsConfigDict(
         env_file=".env",

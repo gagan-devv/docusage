@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { ContractTable } from "@/components/contracts/ContractTable";
 import { UploadModal } from "@/components/contracts/UploadModal";
@@ -52,7 +52,7 @@ export default function ContractsPage() {
     loadContracts();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string | number) => {
     try {
       await api.deleteContract(id);
       setContracts((prev) => prev.filter((c) => c.id !== id));
@@ -62,7 +62,7 @@ export default function ContractsPage() {
   };
 
   const filtered = contracts.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -78,7 +78,8 @@ export default function ContractsPage() {
               <span>Contract Repository</span>
             </h1>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Manage vectorized legal agreements, review clauses, and execute AI audits
+              Manage vectorized legal agreements, review clauses, and execute AI
+              audits
             </p>
           </div>
 

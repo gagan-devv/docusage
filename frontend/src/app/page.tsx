@@ -47,7 +47,7 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string | number) => {
     try {
       await api.deleteContract(id);
       setContracts((prev) => prev.filter((c) => c.id !== id));
