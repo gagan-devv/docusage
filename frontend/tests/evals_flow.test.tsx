@@ -6,6 +6,7 @@ import EvalsPage from "@/app/evals/page";
 vi.mock("@/lib/api", () => ({
   api: {
     getHealth: vi.fn().mockResolvedValue({ status: "healthy", service: "docusage" }),
+    listContracts: vi.fn().mockResolvedValue([]),
     getContractEvals: vi.fn().mockImplementation(async (id) => [
       {
         id: 501,
@@ -39,14 +40,14 @@ describe("Evals & Metrics Workflow", () => {
     });
   });
 
-  it("switches contract ID filter and reloads evaluation log", async () => {
+  it("switches contract filter by name/context and reloads evaluation log", async () => {
     render(<EvalsPage />);
 
-    const button2 = screen.getByText("#2");
-    fireEvent.click(button2);
+    const buttonNda = screen.getByText("Mutual Non-Disclosure Agreement");
+    fireEvent.click(buttonNda);
 
     await waitFor(() => {
-      expect(screen.getByText("Evaluation Log for Contract #2")).toBeInTheDocument();
+      expect(screen.getByText("Evaluation Log for Mutual Non-Disclosure Agreement")).toBeInTheDocument();
     });
   });
 });

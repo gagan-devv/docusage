@@ -105,7 +105,7 @@ export const api = {
   },
 
   // Evals
-  async getContractEvals(contractId: number): Promise<EvalItem[]> {
+  async getContractEvals(contractId: string | number): Promise<EvalItem[]> {
     return fetchJson(`/contracts/${contractId}/evals`);
   },
 

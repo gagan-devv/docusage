@@ -93,12 +93,17 @@ async def delete_contract(contract_id: str) -> bool:
         release_db_connection(conn)
 
 async def get_contract_evals(contract_id: str) -> list[EvalResponse]:
+    try:
+        uuid.UUID(str(contract_id))
+    except (ValueError, AttributeError):
+        return []
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT id, contract_id, metric_name, value, timestamp FROM evals WHERE contract_id = %s ORDER BY timestamp DESC",
-            (contract_id,)
+            (str(contract_id),)
         )
         rows = cursor.fetchall()
         cursor.close()
