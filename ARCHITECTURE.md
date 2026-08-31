@@ -1,6 +1,6 @@
 # Docusage Architecture Specification 🏛️
 
-This document provides an exhaustive technical specification of **Docusage**, an enterprise-grade multi-agent contract compliance and legal risk assessment engine. It covers system topology, the LangGraph state machine, dense vector retrieval mechanics, ingestion pipelines, observability, and containerized deployment.
+This document provides an exhaustive technical specification of **Docusage**, an enterprise-grade multi-agent contract compliance, legal risk assessment, and hierarchical security platform. It covers system topology, passwordless authentication, dual-token lifecycles, the custom Hierarchical Seniority RBAC engine, the LangGraph state machine, dense vector retrieval mechanics, ingestion pipelines, observability, and containerized deployment.
 
 ---
 
@@ -22,114 +22,144 @@ docusage/
 │   │   ├── app/
 │   │   │   ├── main.py            # FastAPI entry point, lifespan, & routes
 │   │   │   ├── config.py          # Pydantic BaseSettings environment config
-│   │   │   ├── routes/            # contracts, policies, metrics endpoints
-│   │   │   ├── services/          # Business logic (CRUD, RAG, file processing)
+│   │   │   ├── routes/            # auth, admin, contracts, policies, settings, metrics
+│   │   │   ├── services/          # auth, rbac, provider_manager, contracts, policies
 │   │   │   ├── models/            # Pydantic schemas (Request/Response)
-│   │   │   └── utils/             # DB pooling, helpers, logging, metrics, tracking
+│   │   │   └── utils/             # jwt, security (AES-256), db, logging, metrics, tracking
 │   │   └── worker/
 │   │       ├── celery_app.py      # Celery broker & result backend initialization
 │   │       └── tasks.py           # Ingestion tasks (chunking & embeddings)
-│   └── tests/                     # 32 Pytest, Hypothesis, and CRUD test suites
+│   └── tests/                     # 48 Pytest, Hypothesis, and CRUD test suites
 │
-├── frontend/                      # Next.js 14 (App Router) TypeScript Client
+├── frontend/                      # Next.js 16 (App Router) TypeScript Client
 │   ├── Dockerfile                 # Multi-stage production container build
 │   ├── .dockerignore              # Node module and cache exclusions
-│   ├── package.json               # Next.js, React 18, Tailwind, Vitest, Playwright
+│   ├── package.json               # Next.js, React 19, Tailwind, Vitest
 │   ├── tailwind.config.ts         # Titanium & Zinc theme design tokens
 │   ├── tsconfig.json
 │   ├── vitest.config.ts
 │   ├── src/
-│   │   ├── app/                   # App Router pages (/contracts, /policies, /evals)
-│   │   ├── components/            # Layout, Reviewer, Dashboard, and Ingestion UI
+│   │   ├── app/                   # App Router pages (/login, /admin/roles, /contracts, /policies, /evals)
+│   │   ├── components/            # Layout, Reviewer, AccessGrantModal, SettingsModal, DecisionDock
 │   │   ├── lib/                   # Typed API client (api.ts) & utility helpers
 │   │   └── types/                 # TypeScript interfaces
-│   └── tests/                     # Vitest unit tests + Playwright browser flows
+│   └── tests/                     # 14 Vitest unit tests + auth/admin workflows
 │
 ├── scripts/
-│   └── setup_db.sql               # PostgreSQL pgvector schema and seed policies
+│   └── setup_db.sql               # PostgreSQL pgvector schema, roles, members, grants, seed
 ├── data/                          # Persistent raw contract storage (volume-mounted)
 ├── docker-compose.yml             # Orchestration for all 5 containerized services
-└── pytest.ini                     # Root runner pointing pythonpath to backend
+├── pytest.ini                     # Root runner pointing pythonpath to backend
+└── ARCHITECTURE.md           # Deep technical specification
 ```
 
 ---
 
-## 2. End-to-End Execution Flow
+## 2. Authentication & Dual-Token Security Architecture
 
-The sequence diagram below illustrates the full lifecycle from contract document ingestion to LangGraph audit, human-in-the-loop breakpoint, and final evaluation persistence:
+Docusage implements a passwordless, token-based authentication system backed by **Resend** for email OTP delivery and cryptographic JSON Web Tokens (JWT).
+
+### 2.1 Token Specifications
+
+| Parameter | Access Token | Refresh Token | Email OTP |
+| :--- | :--- | :--- | :--- |
+| **Lifespan (TTL)** | **30 Minutes** (`1800s`) | **7 Days** (`604800s`) | **10 Minutes** (`600s`) |
+| **Payload Claims** | `sub`, `email`, `org_id`, `role`, `priority`, `is_admin`, `type: "access"`, `iat`, `exp`, `jti` | `sub`, `family_id`, `type: "refresh"`, `iat`, `exp`, `jti` | 6-digit numeric string |
+| **Hashing / Signature** | HS256 JWT Signature | HS256 JWT Signature | **Bcrypt** (Salt rounds = 12) |
+| **Storage & Tracking** | Stateless Bearer header in client memory | Stored in PostgreSQL `refresh_tokens` table | Stored in PostgreSQL `auth_otp_codes` table |
+
+### 2.2 Token Family Rotation & Replay Attack Defense
+
+To prevent compromised refresh tokens from being perpetually reused:
+1. Every successful refresh token exchange (`POST /auth/refresh`) invalidates the consumed refresh token (`is_revoked = TRUE`) and issues a new token pair containing the same `family_id`.
+2. If a previously-consumed refresh token is presented again (replay attempt), the system flags the entire token family as compromised and revokes all tokens belonging to that `family_id`, requiring the user to re-authenticate via OTP.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Counsel as Legal Counsel
-    participant FE as Next.js Frontend
-    participant API as FastAPI Gateway
-    participant Celery as Celery Worker
-    participant DB as PostgreSQL (pgvector)
-    participant LG as LangGraph Engine
-    participant MLflow as MLflow / Prometheus
+    actor User as User / Browser
+    participant API as FastAPI /auth
+    participant Resend as Resend Email Service
+    participant DB as PostgreSQL
 
-    Counsel->>FE: Upload Contract (PDF / DOCX / TXT)
-    FE->>API: POST /contracts/upload
-    API->>DB: INSERT INTO contracts (name, file_path, metadata)
-    API->>Celery: enqueue ingest_contract_task(contract_id, file_path)
-    API-->>FE: Return ContractResponse (ID: 42)
+    User->>API: POST /auth/otp/request { email }
+    API->>API: Generate 6-digit OTP & Bcrypt Hash
+    API->>DB: INSERT INTO auth_otp_codes (email, otp_hash, expires_at)
+    API->>Resend: Emails.send({ to, subject, html })
+    API-->>User: Return { message: "OTP sent" }
 
-    Note over Celery,DB: Asynchronous Background Ingestion
-    Celery->>Celery: Extract Text (pdfplumber / docx)
-    Celery->>Celery: Clean & Chunk Text (512 chars)
-    Celery->>Celery: Generate 768-d Embeddings (all-mpnet-base-v2)
-    Celery->>DB: INSERT INTO clauses (contract_id, text, embedding)
-
-    Counsel->>FE: Start Analysis against Policy
-    FE->>API: POST /contracts/42/graph/start/1?thread_id=t-101
-    API->>LG: ContractAnalysisEngine.start_review(42, 1, "t-101")
-    
-    rect rgb(30, 30, 40)
-        Note over LG: Autonomous Phase
-        LG->>LG: retriever_node: Query top-k clauses per policy rule
-        LG->>DB: SELECT text FROM clauses ORDER BY embedding <=> query LIMIT 2
-        LG->>LG: auditor_node: Calculate deviations & Risk Score
-        alt Risk Score <= 0.3
-            LG->>LG: finalizer_node (Auto-Approve)
-        else Risk Score > 0.3
-            LG->>LG: Pause at breakpoint (interrupt_before=["human_review"])
-        end
-    end
-
-    LG-->>API: Return Snapshot (is_interrupted: true, state)
-    API-->>FE: Return AnalysisSession
-    FE-->>Counsel: Render Split-Screen Reviewer & Highlight Deviations
-
-    Counsel->>FE: Review Deviations & Click 'Revise' with Instructions
-    FE->>API: POST /contracts/graph/t-101/review { action: 'revise', feedback: '...' }
-    API->>LG: ContractAnalysisEngine.submit_human_decision("t-101", "revise", feedback)
-
-    rect rgb(30, 30, 40)
-        Note over LG: Iteration & Concession Loop
-        LG->>LG: refine_node: Apply counsel feedback discount
-        LG->>LG: auditor_node: Recompute adjusted risk score
-        LG->>LG: finalizer_node: Set APPROVED_BY_LEGAL or REJECTED
-    end
-
-    LG->>DB: INSERT INTO evals (compliance_score, risk_score)
-    LG->>MLflow: track_contract_evaluation() & Prometheus.inc()
-    LG-->>API: Return Finalized State
-    API-->>FE: Return Updated Session
-    FE-->>Counsel: Update Reviewer UI to Final Status
+    User->>API: POST /auth/otp/verify { email, code }
+    API->>DB: SELECT otp_hash FROM auth_otp_codes WHERE email = ?
+    API->>API: bcrypt.checkpw(code, otp_hash)
+    API->>DB: INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+    API->>API: Generate 30-min Access Token & 7-day Refresh Token
+    API-->>User: Return { access_token, refresh_token, user }
 ```
 
 ---
 
-## 3. Multi-Agent LangGraph State Machine
+## 3. Hierarchical Seniority-Based RBAC Engine
 
-The core compliance auditing intelligence is implemented using **LangGraph 1.2+** as a deterministic, check-pointed state machine.
+Docusage implements a mathematical, seniority-driven access control model where employee seniority priority automatically determines document visibility, supplemented by granular delegation overrides.
 
-### 3.1 State Schema (`ContractAnalysisState`)
+### 3.1 Mathematical Access Control Model
+
+For any user $u$ requesting access to contract $c$ created by employee $u_{\text{creator}}$:
+
+$$\text{CanView}(u, c) \iff \begin{cases} 
+\text{True} & \text{if } u.\text{is\_admin} = \text{True} \lor u.\text{role} \in \{\text{"Partner"}, \text{"Admin"}\} \\
+\text{True} & \text{if } u.\text{id} = c.\text{created\_by\_user\_id} \\
+\text{True} & \text{if } c.\text{access\_scope} = \text{"org\_wide"} \\
+\text{True} & \text{if } \exists g \in \text{Grants}(c, u) \text{ where } g.\text{expires\_at} > \text{now}() \\
+\text{True} & \text{if } u.\text{priority} \ge u_{\text{creator}}.\text{priority} \\
+\text{False} & \text{otherwise (HTTP 403 Forbidden)}
+\end{cases}$$
+
+### 3.2 Key Properties Verified by Hypothesis
+
+1. **Senior Dominance (Top-Down Visibility):** For all $P_1 \ge P_2$, any employee with priority $P_1$ automatically possesses view and audit rights over documents created by employees with priority $P_2$.
+2. **Junior Shield (Bottom-Up Restriction):** For all $P_1 < P_2$, an employee with priority $P_1$ is strictly forbidden from accessing documents created by employees with priority $P_2$ unless an explicit grant is active.
+3. **Explicit Delegation Override:** Contract creators or seniors can grant specific delegation records (`contract_access_grants`) allowing junior employees temporary or permanent access, which can be revoked at any time.
+4. **Admin Universal Access:** Administrators and Managing Partners maintain universal read/write access across all organization documents regardless of seniority scores.
+
+```mermaid
+flowchart TD
+    req([User Requests Document]) --> isAdmin{Is Org Admin / Partner?}
+    isAdmin -- Yes --> allow([HTTP 200: Access Granted])
+    isAdmin -- No --> isCreator{Is Contract Creator?}
+    
+    isCreator -- Yes --> allow
+    isCreator -- No --> isOrgWide{Access Scope == 'org_wide'?}
+    
+    isOrgWide -- Yes --> allow
+    isOrgWide -- No --> hasGrant{Active Grant in contract_access_grants?}
+    
+    hasGrant -- Yes --> allow
+    hasGrant -- No --> checkSeniority{User Priority >= Creator Priority?}
+    
+    checkSeniority -- Yes (Senior / Peer) --> allow
+    checkSeniority -- No (Junior) --> deny([HTTP 403: Forbidden - Junior Shield])
+
+    classDef allowStyle fill:#064e3b,stroke:#059669,stroke-width:2px,color:#6ee7b7;
+    classDef denyStyle fill:#7f1d1d,stroke:#dc2626,stroke-width:2px,color:#fca5a5;
+    classDef decisionStyle fill:#18181b,stroke:#3f3f46,stroke-width:1px,color:#f4f4f5;
+
+    class allow allowStyle;
+    class deny denyStyle;
+    class isAdmin,isCreator,isOrgWide,hasGrant,checkSeniority decisionStyle;
+```
+
+---
+
+## 4. Multi-Agent LangGraph State Machine
+
+The compliance auditing intelligence is implemented using **LangGraph 1.2+** as a deterministic, check-pointed state machine.
+
+### 4.1 State Schema (`ContractAnalysisState`)
 
 ```python
 class ContractAnalysisState(TypedDict):
-    contract_id: int                         # Unique database ID of the target contract
+    contract_id: Union[str, int]             # Unique database UUID of the target contract
     policy_id: int                           # Target policy definition being audited
     thread_id: str                           # Isolated session checkpoint identifier
     rules: List[Dict[str, Any]]              # Policy covenants evaluated
@@ -143,7 +173,7 @@ class ContractAnalysisState(TypedDict):
     max_iterations: int                      # Upper boundary to prevent infinite looping
 ```
 
-### 3.2 StateGraph Node Topology & Transitions
+### 4.2 StateGraph Node Topology & Transitions
 
 ```mermaid
 flowchart TD
@@ -172,222 +202,121 @@ flowchart TD
     class cond1,cond2 decision;
 ```
 
-### 3.3 Node Specifications
-
-1. **`retriever_node`**:
-   - Queries policy rules from PostgreSQL `policies` table (or uses baseline defaults if unconfigured).
-   - Iterates through each rule query and invokes `retrieve_relevant_clauses(query, contract_id, top_k=2)` via vector similarity search.
-   - Populates `retrieved_clauses` dictionary. Sets status to `"retrieved"`.
-
-2. **`auditor_node`**:
-   - Evaluates retrieved clauses against each rule threshold.
-   - Flags missing or sub-threshold clauses as `HIGH` risk deviations with explanatory rationale.
-   - Calculates baseline risk score:
-     $$\text{Risk Score} = \frac{\text{Total Rules} - \text{Satisfied Rules}}{\text{Total Rules}}$$
-   - If previous human counsel feedback requested revisions with concessions, applies a discount factor ($\max(0.0, \text{Risk} - 0.2)$).
-   - Increments `iteration_count`. Sets status to `"audited"`.
-
-3. **`should_require_human_review` (Conditional Edge)**:
-   - Checks if `risk_score > 0.3` and `iteration_count <= max_iterations`.
-   - If true, routes to `"human_review"`.
-   - If false (contract is low-risk), routes directly to `"finalize"` for automatic approval.
-
-4. **`human_review_node` (Interruption Breakpoint)**:
-   - Configured with `interrupt_before=["human_review"]`.
-   - LangGraph checkpoints state in `MemorySaver` using `thread_id` and suspends thread execution.
-   - Execution halts until legal counsel reviews the findings and invokes `submit_human_decision()`.
-
-5. **`route_human_decision` (Conditional Edge)**:
-   - If `human_action == "revise"` and `iteration_count < max_iterations`, routes to `"refine"`.
-   - If `human_action` is `"approve"` or `"reject"`, routes to `"finalize"`.
-
-6. **`refinement_node`**:
-   - Updates graph context with counsel-provided remediation guidance (`human_feedback`).
-   - Routes back to `auditor_node` for iterative re-audit.
-
-7. **`finalizer_node`**:
-   - Determines final status:
-     - `APPROVED_BY_LEGAL` (Compliance score $\ge 0.9$)
-     - `REJECTED_BY_LEGAL` (Compliance score = $0.0$)
-     - `AUTO_COMPLETED` (Compliance score = $1.0 - \text{Risk Score}$)
-   - Persists metrics to database (`evals` table).
-   - Increments Prometheus counter: `contract_evaluations_total.labels(status=final_status).inc()`.
-   - Logs experiment parameters and metrics to MLflow via `track_contract_evaluation()`.
-
 ---
 
-## 4. Document Ingestion & Vector Storage Pipeline
+## 5. Document Ingestion & Vector Storage Pipeline
 
-### 4.1 Multi-Format Extraction
-- **PDF Documents**: Parsed with `pdfplumber`. Extracts text while preserving tables (formatted as structured markdown tables) to prevent clause boundary truncation.
+### 5.1 Multi-Format Extraction
+- **PDF Documents**: Parsed with `pdfplumber`. Extracts text while preserving tables as markdown format.
 - **DOCX Documents**: Parsed with `python-docx`. Iterates paragraphs and table cells sequentially.
-- **Plain Text / Code**: Read directly using UTF-8 decoding with fallback error replacement.
+- **Plain Text**: Read directly using UTF-8 decoding with fallback error replacement.
 
-### 4.2 Normalization & Chunking
-- **Text Cleaning (`clean_text`)**: Idempotent regex normalization that strips control characters, non-alphanumeric noise, and collapses irregular whitespaces.
-- **Sliding Window Chunking (`chunk_text`)**: Recursively divides normalized text into 512-character blocks with deterministic word-boundary boundaries.
-
-### 4.3 Embedding Model & Dense Vector Dimensions
+### 5.2 Embedding Model & Dense Vector Dimensions
 - Uses **Sentence Transformers** `all-mpnet-base-v2` (`768` dimensions).
-- Produces normalized dense vectors optimized for semantic similarity in commercial contract clauses.
+- Produces normalized dense vectors stored in PostgreSQL via the `pgvector` extension.
 
-### 4.4 PostgreSQL `pgvector` Schema & Cosine Distance Search
+### 5.3 Database Schema ([`scripts/setup_db.sql`](file:///home/gagan-ahlawat/Projects/docusage/scripts/setup_db.sql))
 
 ```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE IF NOT EXISTS contracts (
-    id SERIAL PRIMARY KEY,
+-- 1. Organizations
+CREATE TABLE IF NOT EXISTS organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    file_path VARCHAR(255) NOT NULL,
-    metadata JSONB,
+    domain VARCHAR(255) UNIQUE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS clauses (
+-- 2. Organization Roles (Hierarchical Priorities 1 - 100)
+CREATE TABLE IF NOT EXISTS organization_roles (
     id SERIAL PRIMARY KEY,
-    contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
-    text TEXT NOT NULL,
-    clause_type VARCHAR(100),
-    entities JSONB,
-    embedding vector(768)
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    role_name VARCHAR(100) NOT NULL,
+    priority INT NOT NULL CHECK (priority >= 1 AND priority <= 100),
+    description TEXT,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(org_id, role_name)
 );
 
-CREATE TABLE IF NOT EXISTS policies (
+-- 3. Users & Members
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS organization_members (
     id SERIAL PRIMARY KEY,
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role_id INT REFERENCES organization_roles(id) ON DELETE CASCADE,
+    custom_priority_override INT CHECK (custom_priority_override >= 1 AND custom_priority_override <= 100),
+    joined_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(org_id, user_id)
+);
+
+-- 4. Contracts with Access Scope
+CREATE TABLE IF NOT EXISTS contracts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    rules JSONB
+    file_path VARCHAR(255) NOT NULL,
+    metadata JSONB,
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    access_scope VARCHAR(20) DEFAULT 'seniority',
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS evals (
+-- 5. Granular Delegation Overrides
+CREATE TABLE IF NOT EXISTS contract_access_grants (
     id SERIAL PRIMARY KEY,
-    contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
-    metric_name VARCHAR(100) NOT NULL,
-    value FLOAT NOT NULL,
-    timestamp TIMESTAMP DEFAULT NOW()
+    contract_id UUID REFERENCES contracts(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    granted_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    permission_level VARCHAR(20) DEFAULT 'view',
+    expires_at TIMESTAMP WITH TIME ZONE,
+    granted_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(contract_id, user_id)
 );
 ```
 
-#### Native Vector Query
-Clauses are retrieved using native pgvector cosine distance:
-```sql
-SELECT text 
-FROM clauses 
-WHERE contract_id = %s 
-ORDER BY embedding <=> %s::vector 
-LIMIT %s;
-```
-
-#### Zero-Downtime NumPy Fallback
-If the database vector operator is temporarily unreachable, `retrieve_relevant_clauses` automatically rolls back the cursor, fetches raw float arrays from `clauses`, and computes in-memory cosine similarities:
-$$\text{Sim}(\vec{u}, \vec{v}) = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\| \|\vec{v}\|}$$
-
 ---
 
-## 5. Policy Specification & Governance Rules
+## 6. Model Provider Manager & AES-256 Vault
 
-Corporate policies are defined as JSONB arrays of covenant rules. Each rule encapsulates:
-- `name`: Human-readable covenant label (e.g., `"Limitation of Liability Cap"`).
-- `query`: Target semantic search query vector matching related contract clauses.
-- `threshold`: Cosine similarity confidence cutoff (e.g., `0.80`).
-
-### Default Seed Policy: `Standard Enterprise Policy 2026`
-```json
-[
-  {
-    "name": "Limitation of Liability Cap",
-    "query": "limitation of liability cap aggregate liability",
-    "threshold": 0.80
-  },
-  {
-    "name": "Governing Law (New York)",
-    "query": "governing law jurisdiction New York",
-    "threshold": 0.85
-  },
-  {
-    "name": "Mutual Indemnification",
-    "query": "indemnify hold harmless mutual third party claims",
-    "threshold": 0.75
-  }
-]
-```
-
----
-
-## 6. Frontend Architecture & Design System
-
-The frontend is built with Next.js 14 App Router and TypeScript, styled with a **Clinical Minimalism (Titanium & Zinc)** aesthetic generated via StitchMCP.
-
-### 6.1 Theme & Color Palette
-- **Canvas Base**: `#09090b` (Zinc-950)
-- **Surface Elevation**: `#18181b` (Zinc-900)
-- **Subtle Borders**: `#27272a` (Zinc-800)
-- **Primary Typography**: `#f4f4f5` (Zinc-100)
-- **Muted Typography**: `#71717a` (Zinc-500)
-- **Accent Highlighting**: Titanium Gold (`#d97706` / `#fbbf24`) for deviations; Zinc Emerald (`#10b981`) for compliance.
-
-### 6.2 Reviewer Workbench Components
-- **`DocumentViewer.tsx`**: Left split-pane displaying contract text with color-coded clause deviation bounding highlights.
-- **`PolicyInspector.tsx`**: Right split-pane visualizing live LangGraph state machine status, circular risk score gauge, and evaluated covenants checklist.
-- **`DecisionDock.tsx`**: Floating bottom action dock providing counsel with instantaneous review actions:
-  - **Approve**: Immediately transitions state to `APPROVED_BY_LEGAL` (Score: 0.9+).
-  - **Request Revision / Iterate**: Unfurls counsel feedback input, resumes LangGraph to `refine` node, and recalculates risk.
-  - **Reject**: Transitions state to `REJECTED_BY_LEGAL` (Score: 0.0).
+Docusage supports flexible LLM and embedding providers with hardware-grade key protection:
+- **Local Models via Ollama**: Discovers locally running Ollama models in real-time (`GET /api/tags`).
+- **Cloud Providers**: Native integration with OpenAI, Anthropic, and Google Gemini.
+- **AES-256 Key Vault**: Encrypts API keys using Fernet symmetric encryption with environment-derived encryption salts. Keys are always masked in UI responses (`sk-proj••••••••cdef`).
 
 ---
 
 ## 7. Observability, Metrics & Telemetry
 
-### 7.1 Prometheus Metrics Exposition (`GET /metrics`)
-Implemented via `prometheus_client` and mounted directly into the FastAPI application:
-- `http_requests_total` (Counter, labels: `endpoint`, `method`, `status`): Tracks request volume and API failure rates.
-- `contract_evaluations_total` (Counter, labels: `status`): Tracks audits completed by outcome (`AUTO_COMPLETED`, `APPROVED_BY_LEGAL`, `REJECTED_BY_LEGAL`).
-- `rag_search_duration_seconds` (Histogram): Measures execution latency of semantic clause retrieval across PostgreSQL and NumPy fallbacks.
-
-### 7.2 MLflow Experiment Tracking
-Integrated via `src/backend/app/utils/tracking.py`:
-- Logs every evaluation run under the experiment `"docusage-contract-analysis"`.
-- Records parameters: `contract_id`, `policy_id`, `final_status`, `human_action`, `deviations_count`.
-- Records metrics: `compliance_score`, `risk_score`, `iteration_count`.
-- Handles unreachable MLflow server gracefully without crashing the core review pipeline.
+- **Prometheus Exposition (`GET /metrics`)**:
+  - `http_requests_total` (Counter): Tracks API request volumes by method, route, and status.
+  - `contract_evaluations_total` (Counter): Tracks evaluations by audit outcome.
+  - `rag_search_duration_seconds` (Histogram): Measures clause retrieval search latency.
+- **MLflow Tracking**:
+  - Logs audit runs, parameters (`contract_id`, `policy_id`, `deviations_count`), and metrics (`compliance_score`, `risk_score`).
 
 ---
 
 ## 8. Containerization & Deployment Orchestration
 
-### 8.1 Service Network Topology
+All 5 core services (`backend`, `celery`, `frontend`, `postgres`, `redis`) run via Docker Compose with health checks:
+- **Hot-Reloading Volume Mounts**: `./backend/src:/app/src` and `./data:/app/data` mounted into backend containers for seamless local iteration.
+- **Ordered Startup**: Backend and Celery depend on PostgreSQL and Redis achieving healthy state before starting.
 
-```
-                  Host Network
-             ┌─────────────────────┐
-             │ Port 3000   Port 8000
-             └──────┬──────────┬───┘
-                    │          │
-┌───────────────────┼──────────┼──────────────────────────────┐
-│ Docker Network:   │          │  (docusage_default)          │
-│                   ▼          ▼                              │
-│             ┌──────────┐   ┌──────────┐                     │
-│             │ frontend │   │ backend  │                     │
-│             └──────────┘   └────┬─────┘                     │
-│                                 │                           │
-│                      ┌──────────┴──────────┐                │
-│                      │                     │                │
-│                      ▼                     ▼                │
-│                 ┌─────────┐           ┌─────────┐           │
-│                 │ celery  │           │  redis  │           │
-│                 └────┬────┘           └─────────┘           │
-│                      │                     ▲                │
-│                      │                     │                │
-│                      ▼                     │                │
-│                 ┌──────────┐               │                │
-│                 │ postgres │───────────────┘                │
-│                 │(pgvector)│                                │
-│                 └──────────┘                                │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-### 8.2 Healthcheck & Dependency Orchestration
-- **Postgres Healthcheck**: Runs `pg_isready -U docusage -d docusage` every 5s.
-- **Redis Healthcheck**: Runs `redis-cli ping` every 5s.
-- **Backend & Celery**: Configured with `depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }` to eliminate race conditions during cold starts.
-- **Database Initialization**: Auto-mounts [`scripts/setup_db.sql`](file:///home/gagan-ahlawat/Projects/docusage/scripts/setup_db.sql) to `/docker-entrypoint-initdb.d/init.sql:ro` ensuring extensions and tables exist before application startup.
+## 9. Verification & Testing Standards
+
+- **Backend Pytest Suite (48 Tests)**: Covers JWT lifecycles, Bcrypt OTP hashing, token family rotation, Resend email mocking, hierarchical RBAC integration, and Hypothesis property tests.
+- **Frontend Vitest Suite (14 Tests)**: Covers authentication, role administration, reviewer workflows, and model provider configuration.
+- **Next.js Production Build**: Zero compilation warnings or bundle errors.
