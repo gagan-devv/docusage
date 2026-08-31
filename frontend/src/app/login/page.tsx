@@ -205,10 +205,6 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-
-        <div className="text-center text-[11px] text-zinc-500 font-mono">
-          Protected by 30-min Access Tokens & 7-day Refresh Tokens • Docusage Auth
-        </div>
       </div>
     </div>
   );
