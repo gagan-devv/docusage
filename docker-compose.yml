@@ -9,6 +9,7 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      - ./backend/src:/app/src
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,6 +31,7 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      - ./backend/src:/app/src
     depends_on:
       postgres:
         condition: service_healthy

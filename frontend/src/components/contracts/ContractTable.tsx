@@ -68,6 +68,7 @@ export const ContractTable: React.FC<ContractTableProps> = ({
                 <div className="flex items-center justify-end space-x-2">
                   <Link
                     href={`/contracts/${c.id}`}
+                    prefetch={false}
                     className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-medium text-[11px] transition-colors"
                   >
                     <Shield className="w-3 h-3 text-zinc-400" />

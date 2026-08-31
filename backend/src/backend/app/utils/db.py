@@ -8,15 +8,30 @@ connection_pool: Optional[psycopg2.pool.SimpleConnectionPool] = None
 def get_connection_pool() -> psycopg2.pool.SimpleConnectionPool:
     global connection_pool
     if connection_pool is None:
-        connection_pool = psycopg2.pool.SimpleConnectionPool(
-            minconn=1,
-            maxconn=10,
-            host=settings.db_host,
-            port=settings.db_port,
-            dbname=settings.db_name,
-            user=settings.db_user,
-            password=settings.db_password
-        )
+        host = settings.db_host
+        try:
+            connection_pool = psycopg2.pool.SimpleConnectionPool(
+                minconn=1,
+                maxconn=10,
+                host=host,
+                port=settings.db_port,
+                dbname=settings.db_name,
+                user=settings.db_user,
+                password=settings.db_password
+            )
+        except psycopg2.OperationalError:
+            if host != "localhost":
+                connection_pool = psycopg2.pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=10,
+                    host="localhost",
+                    port=settings.db_port,
+                    dbname=settings.db_name,
+                    user=settings.db_user,
+                    password=settings.db_password
+                )
+            else:
+                raise
     return connection_pool
 
 def get_db_connection():

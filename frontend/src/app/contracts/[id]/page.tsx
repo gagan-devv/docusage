@@ -8,8 +8,9 @@ import { PolicyInspector } from "@/components/reviewer/PolicyInspector";
 import { DecisionDock } from "@/components/reviewer/DecisionDock";
 import { api } from "@/lib/api";
 import { Contract, Policy, GraphState } from "@/types";
-import { ArrowLeft, RefreshCw, Shield, CheckCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Shield, CheckCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
 
 export default function ContractReviewPage() {
   const params = useParams();
@@ -23,6 +24,7 @@ export default function ContractReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
+  const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
 
   useEffect(() => {
     // 1. Load contract details
@@ -146,6 +148,15 @@ export default function ContractReviewPage() {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsGrantModalOpen(true)}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
+            title="Delegate access to juniors or colleagues"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-amber-400" />
+            <span>Delegate Access</span>
+          </button>
+          <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
           <span className="text-[11px] font-mono text-zinc-400 hidden sm:inline">
             Thread: {threadId || "Initializing..."}
           </span>
@@ -193,6 +204,13 @@ export default function ContractReviewPage() {
         onDecision={handleDecision}
         isSubmitting={isSubmitting}
         currentStatus={graphState?.status}
+      />
+
+      <AccessGrantModal
+        contractId={String(contractId)}
+        contractName={contract.name}
+        isOpen={isGrantModalOpen}
+        onClose={() => setIsGrantModalOpen(false)}
       />
     </div>
   );

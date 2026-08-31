@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
 import { SettingsModal } from "../settings/SettingsModal";
 import { api } from "@/lib/api";
-import { Upload, FileText, ShieldAlert, BarChart3, Activity, Settings } from "lucide-react";
+import { AuthUser } from "@/types";
+import { Upload, FileText, ShieldAlert, BarChart3, Activity, Settings, User, LogOut } from "lucide-react";
 
 interface NavbarProps {
   onOpenUpload?: () => void;
@@ -16,12 +17,33 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
   const pathname = usePathname();
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     api
       .getHealth()
       .then(() => setIsBackendHealthy(true))
       .catch(() => setIsBackendHealthy(false));
+
+    if (typeof api.getMe === "function") {
+      api
+        .getMe()
+        .then((res) => {
+          setUser(res.user);
+        })
+        .catch(() => {
+          // Fallback default admin persona
+          setUser({
+            id: "00000000-0000-0000-0000-000000000001",
+            email: "admin@docusage.ai",
+            name: "Eleanor Vance",
+            org_id: "11111111-1111-1111-1111-111111111111",
+            role: "Partner",
+            priority: 90,
+            is_admin: true,
+          });
+        });
+    }
   }, []);
 
   const navLinks = [
@@ -30,6 +52,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
     { href: "/policies", label: "Policies", icon: ShieldAlert },
     { href: "/evals", label: "Evals & Metrics", icon: BarChart3 },
   ];
+
+  if (user?.is_admin || user?.role?.toLowerCase() === "partner") {
+    navLinks.push({ href: "/admin/roles", label: "Admin & RBAC", icon: ShieldAlert });
+  }
 
   return (
     <>
@@ -59,6 +85,23 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
         </div>
 
         <div className="flex items-center space-x-3 sm:space-x-4">
+          {/* User Persona & Seniority Pill */}
+          {user && (
+            <Link
+              href="/login"
+              className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-full bg-[#18181b] border border-[#27272a] hover:border-zinc-500 text-xs transition-colors"
+              title="Switch user persona or log in"
+            >
+              <User className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="font-medium text-zinc-200 truncate max-w-[120px]">
+                {user.name ? user.name.split(" ")[0] : (user.email ? user.email.split("@")[0] : "Counsel")}
+              </span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
+                P{user.priority} • {user.role}
+              </span>
+            </Link>
+          )}
+
           {/* Backend Status Pill */}
           <div className="flex items-center space-x-1.5 text-xs" title="FastAPI Engine Connectivity">
             <span

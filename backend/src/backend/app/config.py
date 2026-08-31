@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     mlflow_experiment_name: str = Field(default="docusage-contract-analysis", validation_alias="MLFLOW_EXPERIMENT_NAME")
     mlflow_enabled: bool = Field(default=True, validation_alias="MLFLOW_ENABLED")
     embedding_model_name: str = Field(default="sentence-transformers/all-mpnet-base-v2", validation_alias="EMBEDDING_MODEL_NAME")
+    resend_api_key: str = Field(default="", validation_alias="RESEND_API_KEY")
+    resend_from_email: str = Field(default="Docusage Security <onboarding@resend.dev>", validation_alias="RESEND_FROM_EMAIL")
 
     model_config = SettingsConfigDict(
         env_file=".env",

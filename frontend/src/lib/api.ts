@@ -1,6 +1,30 @@
-import { Contract, Policy, PolicyRule, EvalItem, AnalysisSession, ModelProvider, UserSetting, OllamaModelTag } from "@/types";
+import { 
+  Contract, 
+  Policy, 
+  PolicyRule, 
+  EvalItem, 
+  AnalysisSession, 
+  ModelProvider, 
+  UserSetting, 
+  OllamaModelTag,
+  AuthUser,
+  AuthResponse,
+  OrgRole,
+  OrgMember,
+  AccessGrant,
+} from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+function getAuthHeader(): Record<string, string> {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("docusage_token");
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+  }
+  return {};
+}
 
 async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
@@ -8,6 +32,7 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeader(),
       ...(options?.headers || {}),
     },
   });
@@ -33,6 +58,52 @@ export const api = {
     return fetchJson("/health");
   },
 
+  // Authentication
+  async requestOtp(email: string, purpose = "login"): Promise<{ message: string; dev_otp?: string }> {
+    return fetchJson("/auth/otp/request", {
+      method: "POST",
+      body: JSON.stringify({ email, purpose }),
+    });
+  },
+
+  async verifyOtp(email: string, code: string): Promise<AuthResponse> {
+    const res = await fetchJson<AuthResponse>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
+    if (typeof window !== "undefined" && res.access_token) {
+      localStorage.setItem("docusage_token", res.access_token);
+      localStorage.setItem("docusage_refresh_token", res.refresh_token);
+      localStorage.setItem("docusage_user", JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  async refreshToken(refreshToken: string): Promise<AuthResponse> {
+    const res = await fetchJson<AuthResponse>("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (typeof window !== "undefined" && res.access_token) {
+      localStorage.setItem("docusage_token", res.access_token);
+      localStorage.setItem("docusage_refresh_token", res.refresh_token);
+      localStorage.setItem("docusage_user", JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  async getMe(): Promise<{ user: AuthUser }> {
+    return fetchJson("/auth/me");
+  },
+
+  logout(): void {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("docusage_token");
+      localStorage.removeItem("docusage_refresh_token");
+      localStorage.removeItem("docusage_user");
+    }
+  },
+
   // Contracts
   async listContracts(skip = 0, limit = 50): Promise<Contract[]> {
     return fetchJson(`/contracts/?skip=${skip}&limit=${limit}`);
@@ -47,6 +118,9 @@ export const api = {
     formData.append("file", file);
     const response = await fetch(`${API_BASE}/contracts/upload`, {
       method: "POST",
+      headers: {
+        ...getAuthHeader(),
+      },
       body: formData,
     });
     if (!response.ok) {
@@ -132,6 +206,56 @@ export const api = {
     return fetchJson("/settings/", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+
+  // Organization Administration & RBAC
+  async getOrgRoles(): Promise<{ roles: OrgRole[] }> {
+    return fetchJson("/admin/org/roles");
+  },
+
+  async updateOrgRole(roleId: number, priority: number, description?: string): Promise<OrgRole> {
+    return fetchJson(`/admin/org/roles/${roleId}`, {
+      method: "PUT",
+      body: JSON.stringify({ priority, description }),
+    });
+  },
+
+  async getOrgMembers(): Promise<{ members: OrgMember[] }> {
+    return fetchJson("/admin/org/members");
+  },
+
+  async updateMember(userId: string, roleId: number, customPriorityOverride?: number | null): Promise<any> {
+    return fetchJson(`/admin/org/members/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify({ role_id: roleId, custom_priority_override: customPriorityOverride }),
+    });
+  },
+
+  // Explicit Contract Access Grants
+  async getContractGrants(contractId: string): Promise<{ grants: AccessGrant[] }> {
+    return fetchJson(`/admin/contracts/${contractId}/grants`);
+  },
+
+  async grantContractAccess(
+    contractId: string,
+    targetUserId: string,
+    permissionLevel: string = "view",
+    expiresAt?: string
+  ): Promise<AccessGrant> {
+    return fetchJson(`/admin/contracts/${contractId}/grants`, {
+      method: "POST",
+      body: JSON.stringify({
+        target_user_id: targetUserId,
+        permission_level: permissionLevel,
+        expires_at: expiresAt,
+      }),
+    });
+  },
+
+  async revokeContractAccess(contractId: string, targetUserId: string): Promise<void> {
+    return fetchJson(`/admin/contracts/${contractId}/grants/${targetUserId}`, {
+      method: "DELETE",
     });
   },
 };

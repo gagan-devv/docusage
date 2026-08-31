@@ -4,6 +4,9 @@ export interface Contract {
   file_path: string;
   metadata: Record<string, any>;
   created_at: string;
+  org_id?: string;
+  created_by_user_id?: string;
+  access_scope?: string;
 }
 
 export interface PolicyRule {
@@ -83,4 +86,54 @@ export interface OllamaModelTag {
   name: string;
   size?: number;
   digest?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  org_id: string;
+  role: string;
+  priority: number;
+  is_admin: boolean;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+export interface OrgRole {
+  id: number;
+  role_name: string;
+  priority: number;
+  description?: string;
+  is_admin: boolean;
+  created_at?: string;
+}
+
+export interface OrgMember {
+  user_id: string;
+  name: string;
+  email: string;
+  role_id: number;
+  role_name: string;
+  priority: number;
+  custom_priority_override?: number | null;
+  is_admin: boolean;
+  joined_at?: string;
+}
+
+export interface AccessGrant {
+  id: number;
+  contract_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  permission_level: string;
+  expires_at?: string | null;
+  granted_at: string;
 }

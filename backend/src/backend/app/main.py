@@ -46,7 +46,11 @@ app.add_middleware(
 )
 
 from src.backend.app.routes.settings import router as settings_router
+from src.backend.app.routes.auth import router as auth_router
+from src.backend.app.routes.admin import router as admin_router
 
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 app.include_router(contracts_router, prefix="/contracts", tags=["contracts"])
 app.include_router(metrics_router)
 app.include_router(policies_router, prefix="/policies", tags=["policies"])

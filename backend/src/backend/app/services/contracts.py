@@ -5,19 +5,35 @@ from src.backend.app.config import settings
 from src.backend.app.utils.db import get_db_connection, release_db_connection
 from src.backend.app.models.contracts import ContractResponse, EvalResponse
 
-async def save_contract(name: str, file_path: str, metadata: dict, contract_id: Optional[str] = None) -> ContractResponse:
+async def save_contract(
+    name: str, 
+    file_path: str, 
+    metadata: dict, 
+    contract_id: Optional[str] = None,
+    org_id: Optional[str] = None,
+    created_by_user_id: Optional[str] = None,
+    access_scope: str = "seniority",
+) -> ContractResponse:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         if contract_id:
             cursor.execute(
-                "INSERT INTO contracts (id, name, file_path, metadata) VALUES (%s, %s, %s, %s) RETURNING *",
-                (contract_id, name, file_path, json.dumps(metadata))
+                """
+                INSERT INTO contracts (id, name, file_path, metadata, org_id, created_by_user_id, access_scope) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s) 
+                RETURNING id, name, file_path, metadata, created_at
+                """,
+                (contract_id, name, file_path, json.dumps(metadata), org_id, created_by_user_id, access_scope)
             )
         else:
             cursor.execute(
-                "INSERT INTO contracts (name, file_path, metadata) VALUES (%s, %s, %s) RETURNING *",
-                (name, file_path, json.dumps(metadata))
+                """
+                INSERT INTO contracts (name, file_path, metadata, org_id, created_by_user_id, access_scope) 
+                VALUES (%s, %s, %s, %s, %s, %s) 
+                RETURNING id, name, file_path, metadata, created_at
+                """,
+                (name, file_path, json.dumps(metadata), org_id, created_by_user_id, access_scope)
             )
         contract = cursor.fetchone()
         conn.commit()
@@ -40,7 +56,7 @@ async def get_contract(contract_id: str) -> Optional[ContractResponse]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM contracts WHERE id = %s", (contract_id,))
+        cursor.execute("SELECT id, name, file_path, metadata, created_at FROM contracts WHERE id = %s", (contract_id,))
         contract = cursor.fetchone()
         cursor.close()
 
@@ -58,11 +74,51 @@ async def get_contract(contract_id: str) -> Optional[ContractResponse]:
     finally:
         release_db_connection(conn)
 
-async def list_contracts(skip: int = 0, limit: int = 50) -> list[ContractResponse]:
+async def list_contracts(
+    skip: int = 0, 
+    limit: int = 50,
+    user_id: Optional[str] = None,
+    is_admin: bool = False,
+) -> list[ContractResponse]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM contracts ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, skip))
+        if not user_id or is_admin:
+            cursor.execute(
+                "SELECT id, name, file_path, metadata, created_at FROM contracts ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (limit, skip)
+            )
+        else:
+            # Hierarchical Seniority + Explicit Grants RBAC Query
+            cursor.execute(
+                """
+                SELECT c.id, c.name, c.file_path, c.metadata, c.created_at 
+                FROM contracts c
+                WHERE (
+                    c.created_by_user_id = %s
+                    OR c.access_scope = 'org_wide'
+                    OR c.created_by_user_id IS NULL
+                    OR EXISTS (
+                        SELECT 1 FROM contract_access_grants g 
+                        WHERE g.contract_id = c.id AND g.user_id = %s 
+                        AND (g.expires_at IS NULL OR g.expires_at > NOW())
+                    )
+                    OR COALESCE((
+                        SELECT COALESCE(m.custom_priority_override, r.priority)
+                        FROM organization_members m
+                        JOIN organization_roles r ON m.role_id = r.id
+                        WHERE m.user_id = %s
+                    ), 0) >= COALESCE((
+                        SELECT COALESCE(m2.custom_priority_override, r2.priority)
+                        FROM organization_members m2
+                        JOIN organization_roles r2 ON m2.role_id = r2.id
+                        WHERE m2.user_id = c.created_by_user_id
+                    ), 0)
+                )
+                ORDER BY c.created_at DESC LIMIT %s OFFSET %s
+                """,
+                (user_id, user_id, user_id, limit, skip)
+            )
         rows = cursor.fetchall()
         cursor.close()
         return [
