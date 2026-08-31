@@ -184,13 +184,45 @@ BEGIN
     END IF;
 END $$;
 
--- Seed default enterprise policy if not present
+-- Seed default enterprise policies if not present
 INSERT INTO policies (name, rules)
 SELECT
-    'Standard Enterprise Policy 2026',
+    'Corporate Commercial MSA Policy',
     '[
         {"name": "Limitation of Liability Cap", "query": "limitation of liability cap aggregate liability", "threshold": 0.8},
         {"name": "Governing Law (New York)", "query": "governing law jurisdiction New York", "threshold": 0.85},
         {"name": "Mutual Indemnification", "query": "indemnify hold harmless mutual third party claims", "threshold": 0.75}
     ]'::jsonb
-WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Standard Enterprise Policy 2026');
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Corporate Commercial MSA Policy');
+
+INSERT INTO policies (name, rules)
+SELECT
+    'Institutional MoU & Event Policy',
+    '[
+        {"name": "Governing Law (India / Gwalior)", "query": "governing law jurisdiction dispute resolution India Gwalior Madhya Pradesh", "threshold": 0.8},
+        {"name": "Force Majeure Rescheduling", "query": "force majeure act of God rescheduling performance advance refund", "threshold": 0.8},
+        {"name": "Cancellation & Logistics Reimbursement", "query": "cancellation unspent advances logistics non-recoverable refund", "threshold": 0.75},
+        {"name": "Authorized Signatories", "query": "authorized signatory Director President SAC Cultural Associate Dean", "threshold": 0.7}
+    ]'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Institutional MoU & Event Policy');
+
+INSERT INTO policies (name, rules)
+SELECT
+    'Budget & Financial Allocation Policy',
+    '[
+        {"name": "Advance Disbursement Cap (<= 70%)", "query": "advance payment percentage 70% booking confirm arrangements", "threshold": 0.8},
+        {"name": "Itemized Expenditure Breakdown", "query": "item description amount budget allocation production banners decor sound", "threshold": 0.8},
+        {"name": "Post-Event Documentation & Bills", "query": "expenses documented bills submitted post-event account reconciliation", "threshold": 0.75},
+        {"name": "Dean & Faculty Approval", "query": "approval support FiC Dean Student Affairs Associate Dean SAC", "threshold": 0.75}
+    ]'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Budget & Financial Allocation Policy');
+
+INSERT INTO policies (name, rules)
+SELECT
+    'NDA & Bilateral Confidentiality Policy',
+    '[
+        {"name": "Definition of Confidential Information", "query": "confidential information trade secrets proprietary technical commercial", "threshold": 0.8},
+        {"name": "Non-Disclosure & Standard of Care", "query": "non-disclosure reasonable care protect third party unauthorized access", "threshold": 0.8},
+        {"name": "Term & Survival Duration", "query": "term of agreement years survival obligation return destroy materials", "threshold": 0.75}
+    ]'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'NDA & Bilateral Confidentiality Policy');

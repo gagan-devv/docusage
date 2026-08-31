@@ -9,7 +9,9 @@ interface DocumentViewerProps {
   clauses?: ContractClause[];
   highlightedClauses?: ClauseHighlight[];
   selectedClauseId?: string | null;
+  activeCitationQuote?: string | null;
   onSelectClause?: (id: string) => void;
+  onSelectCitation?: (quote: string) => void;
 }
 
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({
@@ -17,10 +19,25 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   clauses = [],
   highlightedClauses = [],
   selectedClauseId,
+  activeCitationQuote,
   onSelectClause,
+  onSelectCitation,
 }) => {
   const [viewMode, setViewMode] = useState<"FINDINGS" | "RAW_CHUNKS">("FINDINGS");
   const [activeFilter, setActiveFilter] = useState<"ALL" | "DEVIATION" | "MISSING">("ALL");
+  const chunkRefs = React.useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  React.useEffect(() => {
+    if (activeCitationQuote) {
+      setViewMode("RAW_CHUNKS");
+      const targetIndex = clauses.findIndex((c) =>
+        c.text.toLowerCase().includes(activeCitationQuote.toLowerCase().trim())
+      );
+      if (targetIndex !== -1 && chunkRefs.current[targetIndex]) {
+        chunkRefs.current[targetIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [activeCitationQuote, clauses]);
 
   const filteredHighlights = highlightedClauses.filter((c) => {
     if (activeFilter === "DEVIATION") return c.type === "DEVIATION";
@@ -175,11 +192,20 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
                     {/* Exact Quote Citation or Rationale */}
                     {clause.exactQuote ? (
-                      <div className="p-2.5 rounded bg-black/40 border border-zinc-800 text-zinc-200 mb-2 font-mono text-[11px] flex items-start space-x-2">
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectCitation && clause.exactQuote) onSelectCitation(clause.exactQuote);
+                          else setViewMode("RAW_CHUNKS");
+                        }}
+                        className="p-2.5 rounded bg-black/40 border border-zinc-800 text-zinc-200 mb-2 font-mono text-[11px] flex items-start space-x-2 cursor-pointer hover:border-amber-500/50 hover:bg-amber-950/10 transition-colors"
+                        title="Click to locate and view in raw document text"
+                      >
                         <Quote className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                         <div>
-                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">
-                            Grounded Citation
+                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5 flex items-center space-x-1">
+                            <span>Grounded Citation</span>
+                            <span className="text-[9px] text-amber-400/80">↗ View in Chunk</span>
                           </div>
                           <span>"{clause.exactQuote}"</span>
                         </div>
@@ -214,24 +240,68 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 No raw chunks extracted for this contract.
               </div>
             ) : (
-              clauses.map((clause, idx) => (
-                <div
-                  key={clause.id || idx}
-                  className="p-4 rounded-lg border border-[#27272a] bg-[#151518] hover:border-zinc-600 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-zinc-400">
-                    <span className="font-semibold text-zinc-300">
-                      #CHUNK {idx + 1} (Database ID: {clause.id})
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
-                      {clause.clause_type || "Extracted Clause"}
-                    </span>
+              clauses.map((clause, idx) => {
+                const hasActiveQuote =
+                  activeCitationQuote &&
+                  clause.text.toLowerCase().includes(activeCitationQuote.toLowerCase().trim());
+
+                return (
+                  <div
+                    key={clause.id || idx}
+                    ref={(el) => {
+                      chunkRefs.current[idx] = el;
+                    }}
+                    className={`p-4 rounded-lg border transition-all ${
+                      hasActiveQuote
+                        ? "border-amber-500/70 bg-[#1e1a14] ring-1 ring-amber-500/40 shadow-lg"
+                        : "border-[#27272a] bg-[#151518] hover:border-zinc-600"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-zinc-400">
+                      <span className="font-semibold text-zinc-300 flex items-center space-x-1.5">
+                        <span>#CHUNK {idx + 1}</span>
+                        <span className="text-zinc-600">•</span>
+                        <span>DB ID: {clause.id}</span>
+                        {hasActiveQuote && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px]">
+                            Matching Citation Target
+                          </span>
+                        )}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
+                        {clause.clause_type || "Extracted Clause"}
+                      </span>
+                    </div>
+                    <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-zinc-300 bg-black/30 p-3 rounded border border-zinc-800/80">
+                      {activeCitationQuote && hasActiveQuote ? (
+                        (() => {
+                          const quoteStr = activeCitationQuote.trim();
+                          const lowerT = clause.text.toLowerCase();
+                          const lowerQ = quoteStr.toLowerCase();
+                          const matchIdx = lowerT.indexOf(lowerQ);
+                          if (matchIdx !== -1) {
+                            const b = clause.text.substring(0, matchIdx);
+                            const m = clause.text.substring(matchIdx, matchIdx + quoteStr.length);
+                            const a = clause.text.substring(matchIdx + quoteStr.length);
+                            return (
+                              <>
+                                {b}
+                                <mark className="bg-amber-500/30 text-amber-200 px-1 py-0.5 rounded border border-amber-500/50 font-semibold underline decoration-amber-400">
+                                  {m}
+                                </mark>
+                                {a}
+                              </>
+                            );
+                          }
+                          return clause.text;
+                        })()
+                      ) : (
+                        clause.text
+                      )}
+                    </div>
                   </div>
-                  <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-zinc-300 bg-black/30 p-3 rounded border border-zinc-800/80">
-                    {clause.text}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

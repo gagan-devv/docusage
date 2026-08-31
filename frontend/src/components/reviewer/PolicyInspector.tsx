@@ -9,12 +9,14 @@ interface PolicyInspectorProps {
   policy?: Policy | null;
   graphState?: GraphState | null;
   isLoading?: boolean;
+  onSelectCitation?: (quote: string) => void;
 }
 
 export const PolicyInspector: React.FC<PolicyInspectorProps> = ({
   policy,
   graphState,
   isLoading = false,
+  onSelectCitation,
 }) => {
   const riskScore = graphState?.risk_score ?? 0.0;
   const riskInfo = formatRiskScore(riskScore);
@@ -138,10 +140,15 @@ export const PolicyInspector: React.FC<PolicyInspectorProps> = ({
                   {f.citations && f.citations.length > 0 && (
                     <div className="pt-1.5 border-t border-zinc-800/80 space-y-1 font-mono text-[10px]">
                       {f.citations.map((c, cIdx) => (
-                        <div key={cIdx} className="text-zinc-400 flex items-start space-x-1">
-                          <Quote className="w-3 h-3 text-zinc-500 shrink-0 mt-0.5" />
-                          <span className="text-zinc-300">
-                            [{c.section_reference}]: "{c.exact_quote}"
+                        <div
+                          key={cIdx}
+                          onClick={() => onSelectCitation && onSelectCitation(c.exact_quote)}
+                          className="text-zinc-400 flex items-start space-x-1.5 p-1 rounded hover:bg-zinc-800/60 cursor-pointer transition-colors"
+                          title="Click to deep-link and view in raw document text"
+                        >
+                          <Quote className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                          <span className="text-zinc-300 hover:text-amber-300 leading-snug">
+                            <span className="text-zinc-500 font-semibold">[{c.section_reference}]:</span> "{c.exact_quote}"
                           </span>
                         </div>
                       ))}

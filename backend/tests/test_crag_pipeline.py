@@ -210,3 +210,82 @@ async def test_crag_execution_pipeline_full_lifecycle():
         assert findings[0].citations[0].exact_quote == "uncapped for data breaches"
         assert findings[1].status == "SATISFIED"
         assert findings[1].citations[0].exact_quote == "governed by the laws of the State of New York"
+
+
+@pytest.mark.anyio
+async def test_classify_contract_type_institutional_mou():
+    from src.backend.app.services.crag import classify_contract_type
+
+    sample_text = (
+        "MEMORANDUM OF UNDERSTANDING\n"
+        "This Memorandum of Understanding is entered into by and between ABV-IIITM Gwalior "
+        "and Choke The Band for artist performance at Mridang 2026."
+    )
+    available_policies = [
+        {"id": 1, "name": "Corporate Commercial MSA Policy", "rules": []},
+        {"id": 2, "name": "Institutional MoU & Event Policy", "rules": []},
+        {"id": 3, "name": "Budget & Financial Allocation Policy", "rules": []},
+    ]
+
+    with patch("src.backend.app.services.crag.hf_service.generate_json", new_callable=AsyncMock) as mock_hf:
+        mock_hf.return_value = {
+            "document_type": "Institutional MoU",
+            "recommended_policy_id": 2,
+            "confidence": 0.95,
+            "summary": "Memorandum of Understanding for institutional artist performance."
+        }
+
+        res = await classify_contract_type(sample_text, available_policies)
+        assert res["document_type"] == "Institutional MoU"
+        assert res["recommended_policy_id"] == 2
+        assert res["confidence"] >= 0.90
+
+
+@pytest.mark.anyio
+async def test_refine_findings_with_counsel_waivers():
+    from src.backend.app.services.crag import refine_findings_with_feedback
+
+    findings = [
+        CRAGFinding(
+            rule_name="Governing Law (New York)",
+            status="DEVIATION",
+            confidence_score=0.92,
+            retrieval_grade="CORRECT",
+            citations=[
+                CRAGCitation(
+                    chunk_id=1,
+                    chunk_index=0,
+                    exact_quote="courts in Gwalior shall have exclusive jurisdiction",
+                    section_reference="Section 7"
+                )
+            ],
+            rationale="Agreement specifies Gwalior jurisdiction instead of New York.",
+            suggested_redline="Change to New York."
+        )
+    ]
+
+    feedback = "Waive New York governing law requirement. Accept Gwalior jurisdiction for this event."
+
+    with patch("src.backend.app.services.crag.hf_service.generate_json", new_callable=AsyncMock) as mock_hf:
+        mock_hf.return_value = {
+            "refined_findings": [
+                {
+                    "rule_name": "Governing Law (New York)",
+                    "status": "WAIVED_BY_COUNSEL",
+                    "confidence_score": 0.95,
+                    "retrieval_grade": "CORRECT",
+                    "rationale": "Jurisdiction in Gwalior explicitly waived and approved by legal counsel for this local event.",
+                    "suggested_redline": None
+                }
+            ],
+            "recalculated_risk_score": 0.0,
+            "counsel_notes": "Gwalior jurisdiction accepted per counsel instruction."
+        }
+
+        res = await refine_findings_with_feedback(feedback, findings, "CTB_MoU.pdf")
+        assert len(res["findings"]) == 1
+        assert res["findings"][0].status == "WAIVED_BY_COUNSEL"
+        assert res["risk_score"] == 0.0
+        assert len(res["findings"][0].citations) == 1
+        assert res["findings"][0].citations[0].exact_quote == "courts in Gwalior shall have exclusive jurisdiction"
+

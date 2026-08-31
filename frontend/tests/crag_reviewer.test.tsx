@@ -90,4 +90,18 @@ describe("CRAG Reviewer UI Components", () => {
     expect(screen.getByText("MISSING COVENANT")).toBeDefined();
     expect(screen.getByText("Institutional permission letter does not contain commercial liability terms.")).toBeDefined();
   });
+
+  it("highlights activeCitationQuote inside raw chunks when deep-linking", () => {
+    render(
+      <DocumentViewer
+        contract={mockContract}
+        clauses={mockClauses}
+        highlightedClauses={mockHighlights}
+        activeCitationQuote="Permission to Use Convention Centre"
+      />
+    );
+
+    expect(screen.getByText("Permission to Use Convention Centre")).toBeDefined();
+    expect(screen.getByText("Matching Citation Target")).toBeDefined();
+  });
 });

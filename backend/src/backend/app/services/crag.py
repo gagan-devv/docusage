@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -320,3 +321,149 @@ async def execute_crag_audit_pipeline(
         findings.append(finding)
 
     return findings
+
+
+CLASSIFIER_SYSTEM_PROMPT = """You are a Legal Document Classifier.
+Analyze the introductory text and headings of the uploaded document, and match it to the most relevant compliance policy from the available list.
+
+Available Policies:
+{policies_text}
+
+Output valid JSON matching this schema:
+{
+  "document_type": "Institutional MoU" | "Budget Request" | "Commercial MSA" | "NDA" | "Other",
+  "recommended_policy_id": int,
+  "confidence": float,
+  "summary": "1-2 sentence description of the document"
+}
+"""
+
+REFINEMENT_SYSTEM_PROMPT = """You are a Senior Legal Compliance Auditor handling counsel feedback on an audited contract.
+The legal counsel has reviewed the identified deviations and provided specific revision guidance or waivers.
+
+Evaluate counsel's feedback against the existing findings:
+1. If counsel waived or approved a specific deviation (e.g. accepted local jurisdiction, waived liability cap), update its status to "WAIVED_BY_COUNSEL" or "SATISFIED".
+2. Recalculate the overall risk score (0.0 to 1.0) based on remaining un-waived deviations.
+3. Update the rationale and suggested redline reflecting counsel's directions.
+
+Return valid JSON matching this schema:
+{
+  "refined_findings": [
+    {
+      "rule_name": "rule name",
+      "status": "SATISFIED" | "DEVIATION" | "MISSING_COVENANT" | "WAIVED_BY_COUNSEL",
+      "confidence_score": 0.95,
+      "retrieval_grade": "CORRECT" | "AMBIGUOUS" | "INCORRECT",
+      "rationale": "updated rationale reflecting counsel feedback",
+      "suggested_redline": "updated redline or null"
+    }
+  ],
+  "recalculated_risk_score": 0.2,
+  "counsel_notes": "summary of applied feedback and waivers"
+}
+"""
+
+
+async def classify_contract_type(
+    sample_text: str,
+    available_policies: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Classify contract and recommend the optimal policy."""
+    policies_text = "\n".join([
+        f"- Policy ID {p.get('id', i+1)}: '{p.get('name')}' (Rules: {', '.join([r.get('name', '') for r in p.get('rules', [])])})"
+        for i, p in enumerate(available_policies)
+    ])
+
+    user_prompt = f"DOCUMENT INTRODUCTORY TEXT:\n```\n{sample_text[:1500]}\n```"
+    sys_prompt = CLASSIFIER_SYSTEM_PROMPT.replace("{policies_text}", policies_text)
+
+    try:
+        res = await hf_service.generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )
+        rec_id = res.get("recommended_policy_id")
+        if not rec_id and available_policies:
+            rec_id = available_policies[0].get("id", 1)
+
+        return {
+            "document_type": res.get("document_type", "General Agreement"),
+            "recommended_policy_id": int(rec_id) if rec_id else 1,
+            "confidence": float(res.get("confidence", 0.9)),
+            "summary": res.get("summary", "Document analyzed")
+        }
+    except Exception as e:
+        logger.warning(f"Classification fallback exception: {e}")
+        default_id = available_policies[0].get("id", 1) if available_policies else 1
+        return {
+            "document_type": "Contract",
+            "recommended_policy_id": default_id,
+            "confidence": 0.7,
+            "summary": "Document auto-assigned to default policy."
+        }
+
+
+async def refine_findings_with_feedback(
+    human_feedback: str,
+    current_findings: List[CRAGFinding],
+    contract_name: str
+) -> Dict[str, Any]:
+    """Refine findings using LLM synthesis based on counsel revision feedback."""
+    findings_json = json.dumps([f.model_dump() for f in current_findings], indent=2)
+    user_prompt = (
+        f"CONTRACT NAME: {contract_name}\n\n"
+        f"COUNSEL REVISION FEEDBACK:\n\"{human_feedback}\"\n\n"
+        f"EXISTING CRAG FINDINGS:\n{findings_json}"
+    )
+
+    try:
+        res = await hf_service.generate_json(
+            system_prompt=REFINEMENT_SYSTEM_PROMPT,
+            user_prompt=user_prompt
+        )
+        refined_list = []
+        raw_refined = res.get("refined_findings", [])
+
+        for rf in raw_refined:
+            rule_n = rf.get("rule_name", "Policy Covenant")
+            # Find original citations to preserve
+            orig = next((f for f in current_findings if f.rule_name == rule_n), None)
+            orig_citations = orig.citations if orig else []
+
+            refined_list.append(CRAGFinding(
+                rule_name=rule_n,
+                status=rf.get("status", "SATISFIED"),
+                confidence_score=float(rf.get("confidence_score", 0.9)),
+                retrieval_grade=rf.get("retrieval_grade", "CORRECT"),
+                citations=orig_citations,
+                rationale=rf.get("rationale", "Refined with counsel feedback."),
+                suggested_redline=rf.get("suggested_redline")
+            ))
+
+        recalc_risk = float(res.get("recalculated_risk_score", 0.0))
+        return {
+            "findings": refined_list if refined_list else current_findings,
+            "risk_score": max(0.0, min(1.0, recalc_risk)),
+            "counsel_notes": res.get("counsel_notes", "Feedback applied.")
+        }
+    except Exception as e:
+        logger.warning(f"Refinement fallback exception: {e}")
+        # Fallback waiver logic
+        refined = []
+        for f in current_findings:
+            if "waive" in human_feedback.lower() and (f.rule_name.lower() in human_feedback.lower() or f.status == "DEVIATION"):
+                f_copy = f.model_copy()
+                f_copy.status = "WAIVED_BY_COUNSEL"
+                f_copy.rationale = f"{f.rationale} (Waived by counsel: {human_feedback})"
+                refined.append(f_copy)
+            else:
+                refined.append(f)
+
+        unresolved = [f for f in refined if f.status == "DEVIATION"]
+        new_risk = (len(unresolved) / max(len(refined), 1)) * 0.8
+        return {
+            "findings": refined,
+            "risk_score": new_risk,
+            "counsel_notes": "Heuristic fallback applied for counsel waivers."
+        }
+

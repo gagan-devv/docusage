@@ -147,6 +147,10 @@ export const api = {
     return fetchJson(`/policies/?skip=${skip}&limit=${limit}`);
   },
 
+  async getPolicies(skip = 0, limit = 50): Promise<Policy[]> {
+    return this.listPolicies(skip, limit);
+  },
+
   async getPolicy(id: number): Promise<Policy> {
     return fetchJson(`/policies/${id}`);
   },

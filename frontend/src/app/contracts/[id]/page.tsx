@@ -8,7 +8,7 @@ import { PolicyInspector } from "@/components/reviewer/PolicyInspector";
 import { DecisionDock } from "@/components/reviewer/DecisionDock";
 import { api } from "@/lib/api";
 import { Contract, Policy, GraphState, ContractClause, ClauseHighlight } from "@/types";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, UserPlus, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
 
@@ -19,13 +19,28 @@ export default function ContractReviewPage() {
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [clauses, setClauses] = useState<ContractClause[]>([]);
+  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [selectedPolicyId, setSelectedPolicyId] = useState<number>(1);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
+  const [activeCitationQuote, setActiveCitationQuote] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+
+  // Load policies
+  useEffect(() => {
+    api
+      .getPolicies()
+      .then((pols: Policy[]) => {
+        if (pols && pols.length > 0) {
+          setPolicies(pols);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // 1. Load contract details
@@ -47,13 +62,18 @@ export default function ContractReviewPage() {
       .getContractClauses(contractId)
       .then((cls) => setClauses(cls))
       .catch(() => setClauses([]));
+  }, [contractId]);
 
-    // 3. Start or inspect LangGraph review session with CRAG
-    const activeThreadId = `contract-${contractId}-session`;
+  // 3. Start or inspect LangGraph review session with selected policy
+  useEffect(() => {
+    const activeThreadId = `contract-${contractId}-pol${selectedPolicyId}-session`;
     setThreadId(activeThreadId);
 
+    const activePol = policies.find((p) => p.id === selectedPolicyId);
+    if (activePol) setPolicy(activePol);
+
     api
-      .startAnalysis(contractId, 1, activeThreadId)
+      .startAnalysis(contractId, selectedPolicyId, activeThreadId)
       .then((res) => {
         setGraphState(res.state);
       })
@@ -61,9 +81,9 @@ export default function ContractReviewPage() {
         // Fallback default state for offline mode
         setGraphState({
           contract_id: contractId,
-          policy_id: 1,
+          policy_id: selectedPolicyId,
           thread_id: activeThreadId,
-          rules: [
+          rules: activePol?.rules || [
             { name: "Limitation of Liability Cap", query: "limitation of liability cap" },
             { name: "Governing Law Jurisdiction", query: "governing law jurisdiction" },
           ],
@@ -76,7 +96,7 @@ export default function ContractReviewPage() {
           max_iterations: 3,
         });
       });
-  }, [contractId]);
+  }, [contractId, selectedPolicyId, policies]);
 
   const handleDecision = async (action: "approve" | "reject" | "revise", feedback?: string) => {
     if (!threadId) return;
@@ -170,6 +190,29 @@ export default function ContractReviewPage() {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* Policy Selector Dropdown */}
+          <div className="flex items-center space-x-1.5 bg-zinc-900 border border-zinc-700/80 rounded px-2.5 py-1 text-xs font-mono shadow-sm">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-zinc-400 text-[10px] uppercase tracking-wider">Policy:</span>
+            <select
+              value={selectedPolicyId}
+              onChange={(e) => setSelectedPolicyId(Number(e.target.value))}
+              className="bg-transparent text-zinc-100 text-xs font-mono focus:outline-none cursor-pointer pr-1"
+            >
+              {policies.length > 0 ? (
+                policies.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-[#18181b] text-zinc-200">
+                    {p.name}
+                  </option>
+                ))
+              ) : (
+                <option value={1} className="bg-[#18181b] text-zinc-200">
+                  Standard Enterprise Policy
+                </option>
+              )}
+            </select>
+          </div>
+
           <button
             onClick={() => setIsGrantModalOpen(true)}
             className="flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
@@ -178,10 +221,6 @@ export default function ContractReviewPage() {
             <UserPlus className="w-3.5 h-3.5 text-amber-400" />
             <span>Delegate Access</span>
           </button>
-          <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
-          <span className="text-[11px] font-mono text-zinc-400 hidden sm:inline">
-            Thread: {threadId || "Initializing..."}
-          </span>
           <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
           <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
             Interactive CRAG Mode
@@ -214,12 +253,15 @@ export default function ContractReviewPage() {
           clauses={clauses}
           highlightedClauses={highlightedClauses}
           selectedClauseId={selectedClauseId}
+          activeCitationQuote={activeCitationQuote}
           onSelectClause={(id) => setSelectedClauseId(id)}
+          onSelectCitation={(quote) => setActiveCitationQuote(quote)}
         />
         <PolicyInspector
           policy={policy}
           graphState={graphState}
           isLoading={isSubmitting}
+          onSelectCitation={(quote) => setActiveCitationQuote(quote)}
         />
       </main>
 

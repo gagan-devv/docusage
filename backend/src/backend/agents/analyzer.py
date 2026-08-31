@@ -5,7 +5,11 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from src.backend.app.utils.db import get_db_connection, release_db_connection
 from src.backend.app.services.rag import retrieve_relevant_chunks_with_metadata
-from src.backend.app.services.crag import execute_crag_audit_pipeline, CRAGFinding
+from src.backend.app.services.crag import (
+    execute_crag_audit_pipeline,
+    refine_findings_with_feedback,
+    CRAGFinding
+)
 from src.backend.app.utils.metrics import contract_evaluations_total
 from src.backend.app.utils.tracking import track_contract_evaluation
 
@@ -188,10 +192,48 @@ def auditor_node(state: ContractAnalysisState) -> Dict[str, Any]:
     # Risk score: fraction of rules deviating or unfulfilled
     risk_score = float((total_rules - satisfied_count) / total_rules)
     
-    # Factor in previous human feedback if iterating
+    # Factor in previous human feedback if iterating via LLM refinement synthesis
     if state.get("human_action") == "revise" and state.get("human_feedback"):
-        # Human granted concessions or waived conditions -> discount risk
-        risk_score = max(0.0, risk_score - 0.2)
+        try:
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    refine_res = pool.submit(
+                        asyncio.run,
+                        refine_findings_with_feedback(
+                            state.get("human_feedback", ""),
+                            findings,
+                            contract_meta.get("name", "document")
+                        )
+                    ).result()
+            else:
+                refine_res = loop.run_until_complete(
+                    refine_findings_with_feedback(
+                        state.get("human_feedback", ""),
+                        findings,
+                        contract_meta.get("name", "document")
+                    )
+                )
+            findings = refine_res.get("findings", findings)
+            risk_score = refine_res.get("risk_score", risk_score)
+            
+            # Rebuild deviations from refined findings
+            deviations = [
+                {
+                    "rule": f.rule_name,
+                    "risk": "HIGH" if f.status == "DEVIATION" else "MEDIUM" if f.status == "MISSING_COVENANT" else "LOW",
+                    "reason": f.rationale,
+                    "status": f.status,
+                    "confidence_score": f.confidence_score,
+                    "citations": f.model_dump().get("citations", []),
+                    "suggested_redline": f.suggested_redline
+                }
+                for f in findings
+                if f.status in ("DEVIATION", "MISSING_COVENANT", "WAIVED_BY_COUNSEL")
+            ]
+        except Exception as e:
+            # Fallback heuristic waiver
+            risk_score = max(0.0, risk_score - 0.2)
 
     iteration = state.get("iteration_count", 0) + 1
 
