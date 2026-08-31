@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     hf_token: str = ""
+    hf_model_name: str = Field(default="meta-llama/Llama-3.1-8B-Instruct", validation_alias="HF_MODEL_NAME")
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/0"
     mlflow_tracking_uri: str = Field(default="http://localhost:5000", validation_alias="MLFLOW_TRACKING_URI")

@@ -53,10 +53,16 @@ async def save_contract(
         release_db_connection(conn)
 
 async def get_contract(contract_id: str) -> Optional[ContractResponse]:
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return None
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, file_path, metadata, created_at FROM contracts WHERE id = %s", (contract_id,))
+        cursor.execute("SELECT id, name, file_path, metadata, created_at FROM contracts WHERE id = %s", (valid_uuid,))
         contract = cursor.fetchone()
         cursor.close()
 
@@ -135,12 +141,18 @@ async def list_contracts(
         release_db_connection(conn)
 
 async def delete_contract(contract_id: str) -> bool:
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return False
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM clauses WHERE contract_id = %s", (contract_id,))
-        cursor.execute("DELETE FROM evals WHERE contract_id = %s", (contract_id,))
-        cursor.execute("DELETE FROM contracts WHERE id = %s", (contract_id,))
+        cursor.execute("DELETE FROM clauses WHERE contract_id = %s", (valid_uuid,))
+        cursor.execute("DELETE FROM evals WHERE contract_id = %s", (valid_uuid,))
+        cursor.execute("DELETE FROM contracts WHERE id = %s", (valid_uuid,))
         deleted = cursor.rowcount > 0
         conn.commit()
         cursor.close()
@@ -150,7 +162,8 @@ async def delete_contract(contract_id: str) -> bool:
 
 async def get_contract_evals(contract_id: str) -> list[EvalResponse]:
     try:
-        uuid.UUID(str(contract_id))
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
     except (ValueError, AttributeError):
         return []
 
@@ -159,7 +172,7 @@ async def get_contract_evals(contract_id: str) -> list[EvalResponse]:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT id, contract_id, metric_name, value, timestamp FROM evals WHERE contract_id = %s ORDER BY timestamp DESC",
-            (str(contract_id),)
+            (valid_uuid,)
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -171,6 +184,35 @@ async def get_contract_evals(contract_id: str) -> list[EvalResponse]:
                 value=r[3],
                 timestamp=r[4]
             )
+            for r in rows
+        ]
+    finally:
+        release_db_connection(conn)
+
+async def get_contract_clauses_list(contract_id: str) -> list[dict]:
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return []
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, contract_id, text, clause_type, entities FROM clauses WHERE contract_id = %s ORDER BY id ASC",
+            (valid_uuid,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                "id": r[0],
+                "contract_id": str(r[1]),
+                "text": r[2],
+                "clause_type": r[3] or "Clause",
+                "entities": r[4] or {},
+            }
             for r in rows
         ]
     finally:

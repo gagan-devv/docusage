@@ -36,18 +36,32 @@ describe("Human-in-the-Loop (HITL) Reviewer Flow", () => {
     max_iterations: 3,
   };
 
+  const sampleHighlights = [
+    {
+      id: "clause-liability",
+      section: "Section 8.2 - Limitation of Liability",
+      text: "Neither party shall be liable for indirect damages. Liability shall be uncapped for breach.",
+      type: "DEVIATION" as const,
+      ruleName: "Limitation of Liability Cap",
+      confidence: 0.92,
+      exactQuote: "Liability shall be uncapped for breach",
+      rationale: "Liability uncapped for breach, exceeding maximum allowable 2x fees cap."
+    }
+  ];
+
   it("renders DocumentViewer with highlighted clauses and filter controls", () => {
     const onSelect = vi.fn();
     render(
       <DocumentViewer
         contract={sampleContract}
+        highlightedClauses={sampleHighlights}
         onSelectClause={onSelect}
       />
     );
 
     expect(screen.getByText("Master_Services_Agreement_2026.pdf")).toBeInTheDocument();
     expect(screen.getByText(/Section 8.2 - Limitation of Liability/i)).toBeInTheDocument();
-    expect(screen.getByText(/Neither party shall be liable for indirect/)).toBeInTheDocument();
+    expect(screen.getByText(/Liability uncapped for breach/)).toBeInTheDocument();
 
     // Clicking a clause triggers selection callback
     const clauseCard = screen.getByText(/Section 8.2 - Limitation of Liability/i);
@@ -62,11 +76,10 @@ describe("Human-in-the-Loop (HITL) Reviewer Flow", () => {
       />
     );
 
-    expect(screen.getByText("LangGraph AI Inspector")).toBeInTheDocument();
+    expect(screen.getByText("CRAG Compliance Inspector")).toBeInTheDocument();
     expect(screen.getByText("PAUSED_AT_HUMAN_REVIEW")).toBeInTheDocument();
     expect(screen.getByText("0.33")).toBeInTheDocument();
-    expect(screen.getByText("HIGH RISK")).toBeInTheDocument();
-    expect(screen.getByText(/Liability uncapped for breach/)).toBeInTheDocument();
+    expect(screen.getByText("Limitation of Liability Cap")).toBeInTheDocument();
   });
 
   it("handles Human Decision Dock approval action", async () => {

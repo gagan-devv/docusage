@@ -1,5 +1,5 @@
 from sentence_transformers import SentenceTransformer
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import numpy as np
 from src.backend.app.config import settings
 from src.backend.app.utils.db import get_db_connection, release_db_connection
@@ -34,6 +34,17 @@ from typing import List, Optional, Any
 
 @rag_search_duration_seconds.time()
 def retrieve_relevant_clauses(query: str, contract_id: Any, top_k: int = 3) -> List[str]:
+    chunks = retrieve_relevant_chunks_with_metadata(query, contract_id, top_k)
+    return [c["text"] for c in chunks]
+
+
+def retrieve_relevant_chunks_with_metadata(query: str, contract_id: Any, top_k: int = 3) -> List[Dict[str, Any]]:
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return []
+
     conn = None
     try:
         conn = get_db_connection()
@@ -46,22 +57,22 @@ def retrieve_relevant_clauses(query: str, contract_id: Any, top_k: int = 3) -> L
             # Native pgvector cosine distance operator <=>
             cursor.execute(
                 """
-                SELECT text 
+                SELECT id, text 
                 FROM clauses 
                 WHERE contract_id = %s 
                 ORDER BY embedding <=> %s::vector 
                 LIMIT %s
                 """,
-                (contract_id, str(emb_list), top_k)
+                (valid_uuid, str(emb_list), top_k)
             )
             rows = cursor.fetchall()
             cursor.close()
-            return [r[0] for r in rows]
+            return [{"id": r[0], "text": r[1]} for r in rows]
         except Exception:
             # Fallback to in-memory cosine similarity if pgvector operator is unavailable
             conn.rollback()
             cursor = conn.cursor()
-            cursor.execute("SELECT text, embedding FROM clauses WHERE contract_id = %s", (contract_id,))
+            cursor.execute("SELECT id, text, embedding FROM clauses WHERE contract_id = %s", (valid_uuid,))
             clauses = cursor.fetchall()
             cursor.close()
 
@@ -69,12 +80,12 @@ def retrieve_relevant_clauses(query: str, contract_id: Any, top_k: int = 3) -> L
                 return []
 
             similarities = []
-            for clause_text, clause_embeddings in clauses:
+            for clause_id, clause_text, clause_embeddings in clauses:
                 sim = compute_cosine_similarity(query_embedding, np.array(clause_embeddings))
-                similarities.append((clause_text, sim))
+                similarities.append(({"id": clause_id, "text": clause_text}, sim))
 
             similarities.sort(key=lambda x: x[1], reverse=True)
-            return [text for text, _ in similarities[:top_k]]
+            return [chunk for chunk, _ in similarities[:top_k]]
     except Exception:
         return []
     finally:

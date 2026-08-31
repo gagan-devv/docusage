@@ -1,5 +1,6 @@
 import { 
   Contract, 
+  ContractClause,
   Policy, 
   PolicyRule, 
   EvalItem, 
@@ -111,6 +112,10 @@ export const api = {
 
   async getContract(id: string | number): Promise<Contract> {
     return fetchJson(`/contracts/${id}`);
+  },
+
+  async getContractClauses(id: string | number): Promise<ContractClause[]> {
+    return fetchJson(`/contracts/${id}/clauses`);
   },
 
   async uploadContract(file: File): Promise<Contract> {

@@ -34,10 +34,53 @@ export interface RuleMatch {
   evidence: string | null;
 }
 
+export interface ContractClause {
+  id: number;
+  contract_id: string | number;
+  text: string;
+  clause_type?: string;
+  entities?: Record<string, any>;
+}
+
+export interface CRAGCitation {
+  chunk_id?: number | null;
+  chunk_index: number;
+  exact_quote: string;
+  section_reference?: string;
+  relevance_score?: number;
+}
+
+export interface CRAGFinding {
+  rule_name: string;
+  status: "SATISFIED" | "DEVIATION" | "MISSING_COVENANT" | "NOT_APPLICABLE";
+  confidence_score: number;
+  retrieval_grade: "CORRECT" | "AMBIGUOUS" | "INCORRECT";
+  citations: CRAGCitation[];
+  rationale: string;
+  suggested_redline?: string | null;
+}
+
+export interface ClauseHighlight {
+  id: string;
+  section: string;
+  text: string;
+  type: "DEVIATION" | "SATISFIED" | "MISSING_COVENANT" | "INFO";
+  ruleName: string;
+  similarity?: number;
+  confidence?: number;
+  exactQuote?: string;
+  suggestedRedline?: string | null;
+  rationale?: string;
+}
+
 export interface GraphDeviation {
   rule: string;
   risk: "HIGH" | "MEDIUM" | "LOW";
   reason: string;
+  status?: string;
+  confidence_score?: number;
+  citations?: CRAGCitation[];
+  suggested_redline?: string | null;
 }
 
 export interface GraphState {
@@ -46,6 +89,8 @@ export interface GraphState {
   thread_id: string;
   rules: PolicyRule[];
   retrieved_clauses: Record<string, string[]>;
+  crag_findings?: CRAGFinding[];
+  citations?: CRAGCitation[];
   deviations: GraphDeviation[];
   risk_score: number;
   status: string;

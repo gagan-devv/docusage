@@ -7,8 +7,8 @@ import { DocumentViewer } from "@/components/reviewer/DocumentViewer";
 import { PolicyInspector } from "@/components/reviewer/PolicyInspector";
 import { DecisionDock } from "@/components/reviewer/DecisionDock";
 import { api } from "@/lib/api";
-import { Contract, Policy, GraphState } from "@/types";
-import { ArrowLeft, RefreshCw, Shield, CheckCircle, UserPlus } from "lucide-react";
+import { Contract, Policy, GraphState, ContractClause, ClauseHighlight } from "@/types";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
 
@@ -18,6 +18,7 @@ export default function ContractReviewPage() {
   const contractId = (params?.id as string) || "1";
 
   const [contract, setContract] = useState<Contract | null>(null);
+  const [clauses, setClauses] = useState<ContractClause[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -34,14 +35,20 @@ export default function ContractReviewPage() {
       .catch(() => {
         setContract({
           id: contractId,
-          name: "Master_Services_Agreement_2026.pdf",
+          name: "Contract_Document.pdf",
           file_path: `data/contracts/${contractId}.pdf`,
-          metadata: { size: 245000, pages: 18 },
+          metadata: { size: 245000, pages: 1 },
           created_at: new Date().toISOString(),
         });
       });
 
-    // 2. Start or inspect LangGraph review session
+    // 2. Load actual extracted document chunks
+    api
+      .getContractClauses(contractId)
+      .then((cls) => setClauses(cls))
+      .catch(() => setClauses([]));
+
+    // 3. Start or inspect LangGraph review session with CRAG
     const activeThreadId = `contract-${contractId}-session`;
     setThreadId(activeThreadId);
 
@@ -51,24 +58,19 @@ export default function ContractReviewPage() {
         setGraphState(res.state);
       })
       .catch(() => {
-        // Fallback default paused graph state for offline review
+        // Fallback default state for offline mode
         setGraphState({
           contract_id: contractId,
           policy_id: 1,
           thread_id: activeThreadId,
           rules: [
             { name: "Limitation of Liability Cap", query: "limitation of liability cap" },
-            { name: "Governing Law (New York)", query: "governing law jurisdiction" },
+            { name: "Governing Law Jurisdiction", query: "governing law jurisdiction" },
           ],
           retrieved_clauses: {},
-          deviations: [
-            {
-              rule: "Limitation of Liability Cap",
-              risk: "HIGH",
-              reason: "Contract contains uncapped liability clause for breach, violating the 2x contract value maximum cap policy.",
-            },
-          ],
-          risk_score: 0.33,
+          crag_findings: [],
+          deviations: [],
+          risk_score: 0.0,
           status: "PAUSED_AT_HUMAN_REVIEW",
           iteration_count: 1,
           max_iterations: 3,
@@ -121,6 +123,26 @@ export default function ContractReviewPage() {
     }
   };
 
+  // Convert CRAG findings or deviations into dynamic highlights for the document viewer
+  const highlightedClauses: ClauseHighlight[] = (graphState?.crag_findings || []).map((finding, idx) => {
+    const primaryCitation = finding.citations?.[0];
+    return {
+      id: `finding-${idx}`,
+      section: primaryCitation?.section_reference || finding.rule_name,
+      text: primaryCitation?.exact_quote || finding.rationale,
+      type: finding.status === "DEVIATION"
+        ? "DEVIATION"
+        : finding.status === "MISSING_COVENANT"
+        ? "MISSING_COVENANT"
+        : "SATISFIED",
+      ruleName: finding.rule_name,
+      confidence: finding.confidence_score && finding.confidence_score > 0 ? finding.confidence_score : 0.95,
+      exactQuote: primaryCitation?.exact_quote,
+      suggestedRedline: finding.suggested_redline,
+      rationale: finding.rationale,
+    };
+  });
+
   if (!contract) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-xs font-mono text-zinc-400">
@@ -162,7 +184,7 @@ export default function ContractReviewPage() {
           </span>
           <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
           <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-            Interactive HITL Mode
+            Interactive CRAG Mode
           </span>
         </div>
       </div>
@@ -189,6 +211,8 @@ export default function ContractReviewPage() {
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 gap-4 max-w-7xl w-full mx-auto">
         <DocumentViewer
           contract={contract}
+          clauses={clauses}
+          highlightedClauses={highlightedClauses}
           selectedClauseId={selectedClauseId}
           onSelectClause={(id) => setSelectedClauseId(id)}
         />

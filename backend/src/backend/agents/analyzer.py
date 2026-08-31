@@ -1,9 +1,11 @@
+import asyncio
 from typing import TypedDict, List, Dict, Any, Optional, Union
 from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.memory import MemorySaver
 
 from src.backend.app.utils.db import get_db_connection, release_db_connection
-from src.backend.app.services.rag import retrieve_relevant_clauses
+from src.backend.app.services.rag import retrieve_relevant_chunks_with_metadata
+from src.backend.app.services.crag import execute_crag_audit_pipeline, CRAGFinding
 from src.backend.app.utils.metrics import contract_evaluations_total
 from src.backend.app.utils.tracking import track_contract_evaluation
 
@@ -14,6 +16,9 @@ class ContractAnalysisState(TypedDict):
     thread_id: str
     rules: List[Dict[str, Any]]
     retrieved_clauses: Dict[str, List[str]]
+    candidate_chunks: Dict[str, List[Dict[str, Any]]]
+    crag_findings: List[Dict[str, Any]]
+    citations: List[Dict[str, Any]]
     deviations: List[Dict[str, Any]]
     risk_score: float
     status: str
@@ -48,15 +53,46 @@ def fetch_policy_rules(policy_id: int) -> List[Dict[str, Any]]:
     ]
 
 
-def persist_eval_metric(contract_id: int, metric_name: str, value: float):
+def fetch_contract_metadata(contract_id: Any) -> Dict[str, Any]:
+    """Fetch contract name and metadata from database."""
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return {"name": f"Contract_{contract_id}", "metadata": {}}
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, metadata FROM contracts WHERE id = %s", (valid_uuid,))
+        row = cursor.fetchone()
+        cursor.close()
+        if row:
+            return {"name": row[0], "metadata": row[1] or {}}
+    except Exception:
+        pass
+    finally:
+        if conn:
+            release_db_connection(conn)
+    return {"name": f"Contract_{contract_id}", "metadata": {}}
+
+
+def persist_eval_metric(contract_id: Any, metric_name: str, value: float):
     """Save compliance or risk metric to evals table."""
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return
+
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO evals (contract_id, metric_name, value) VALUES (%s, %s, %s)",
-            (contract_id, metric_name, value)
+            (valid_uuid, metric_name, value)
         )
         conn.commit()
         cursor.close()
@@ -68,52 +104,89 @@ def persist_eval_metric(contract_id: int, metric_name: str, value: float):
 
 
 # ----------------------------------------------------------------------
-# Graph Node Implementations
+# Graph Node Implementations (Corrective RAG - CRAG)
 # ----------------------------------------------------------------------
 
 def retriever_node(state: ContractAnalysisState) -> Dict[str, Any]:
-    """Agent Node: Retrieves clauses relevant to each policy rule."""
+    """Agent Node: Retrieves candidate chunks relevant to each policy rule."""
     contract_id = state["contract_id"]
     rules = state.get("rules") or fetch_policy_rules(state["policy_id"])
     
-    retrieved = {}
+    retrieved_texts = {}
+    candidate_chunks = {}
+    
     for rule in rules:
-        query = rule.get("query", rule.get("name", "general clause"))
+        r_name = rule.get("name", "rule")
+        query = rule.get("query", r_name)
         try:
-            clauses = retrieve_relevant_clauses(query, contract_id, top_k=2)
+            chunks = retrieve_relevant_chunks_with_metadata(query, contract_id, top_k=3)
         except Exception:
-            clauses = []
-        retrieved[rule.get("name", "unknown")] = clauses
+            chunks = []
+        candidate_chunks[r_name] = chunks
+        retrieved_texts[r_name] = [c.get("text", "") for c in chunks]
 
     return {
         "rules": rules,
-        "retrieved_clauses": retrieved,
+        "retrieved_clauses": retrieved_texts,
+        "candidate_chunks": candidate_chunks,
         "status": "retrieved"
     }
 
 
 def auditor_node(state: ContractAnalysisState) -> Dict[str, Any]:
-    """Agent Node: Audits clauses against policy rules and computes risk score."""
+    """Agent Node: Audits chunks using Corrective RAG (CRAG) with confidence grading and citations."""
     rules = state.get("rules", [])
-    retrieved = state.get("retrieved_clauses", {})
-    deviations = []
+    candidate_chunks = state.get("candidate_chunks", {})
+    contract_meta = fetch_contract_metadata(state["contract_id"])
+    
+    # Run async CRAG audit pipeline synchronously within worker/node
+    try:
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            # In an already running loop (FastAPI ASGI context)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                findings: List[CRAGFinding] = pool.submit(
+                    asyncio.run,
+                    execute_crag_audit_pipeline(rules, candidate_chunks, contract_meta)
+                ).result()
+        else:
+            findings = loop.run_until_complete(
+                execute_crag_audit_pipeline(rules, candidate_chunks, contract_meta)
+            )
+    except Exception as e:
+        # Fallback if async execution encounters unexpected threading issue
+        findings = []
 
-    satisfied = 0
-    for rule in rules:
-        r_name = rule.get("name", "rule")
-        clauses = retrieved.get(r_name, [])
-        if not clauses:
+    deviations = []
+    all_citations = []
+    satisfied_count = 0
+
+    for finding in findings:
+        f_dict = finding.model_dump()
+        all_citations.extend(f_dict.get("citations", []))
+        
+        if finding.status in ("DEVIATION", "MISSING_COVENANT"):
             deviations.append({
-                "rule": r_name,
-                "risk": "HIGH",
-                "reason": "Missing required covenant or clause not found in contract"
+                "rule": finding.rule_name,
+                "risk": "HIGH" if finding.status == "DEVIATION" else "MEDIUM",
+                "reason": finding.rationale,
+                "status": finding.status,
+                "confidence_score": finding.confidence_score,
+                "citations": f_dict.get("citations", []),
+                "suggested_redline": finding.suggested_redline
             })
         else:
-            satisfied += 1
+            satisfied_count += 1
 
-    total_rules = max(1, len(rules))
+    total_rules = max(1, len(rules)) if rules else max(1, len(findings))
     # Risk score: fraction of rules deviating or unfulfilled
-    risk_score = float((total_rules - satisfied) / total_rules)
+    risk_score = float((total_rules - satisfied_count) / total_rules)
     
     # Factor in previous human feedback if iterating
     if state.get("human_action") == "revise" and state.get("human_feedback"):
@@ -123,6 +196,8 @@ def auditor_node(state: ContractAnalysisState) -> Dict[str, Any]:
     iteration = state.get("iteration_count", 0) + 1
 
     return {
+        "crag_findings": [f.model_dump() for f in findings],
+        "citations": all_citations,
         "deviations": deviations,
         "risk_score": risk_score,
         "iteration_count": iteration,
@@ -132,7 +207,6 @@ def auditor_node(state: ContractAnalysisState) -> Dict[str, Any]:
 
 def should_require_human_review(state: ContractAnalysisState) -> str:
     """Routing condition: check if risk exceeds auto-approval threshold."""
-    # If high risk deviations exist and under iteration limit -> human review
     max_iter = state.get("max_iterations", 3)
     if state.get("risk_score", 0.0) > 0.3 and state.get("iteration_count", 0) <= max_iter:
         return "human_review"
@@ -244,13 +318,13 @@ def create_contract_analysis_graph(checkpointer: Optional[MemorySaver] = None):
 
 
 class ContractAnalysisEngine:
-    """High-level facade orchestrating iterative human-in-the-loop contract reviews."""
+    """High-level facade orchestrating iterative human-in-the-loop contract reviews with CRAG."""
 
     def __init__(self):
         self.memory = MemorySaver()
         self.graph = create_contract_analysis_graph(checkpointer=self.memory)
 
-    def start_review(self, contract_id: int, policy_id: int, thread_id: str) -> Dict[str, Any]:
+    def start_review(self, contract_id: Any, policy_id: int, thread_id: str) -> Dict[str, Any]:
         config = {"configurable": {"thread_id": thread_id}}
         initial_state: ContractAnalysisState = {
             "contract_id": contract_id,
@@ -258,6 +332,9 @@ class ContractAnalysisEngine:
             "thread_id": thread_id,
             "rules": [],
             "retrieved_clauses": {},
+            "candidate_chunks": {},
+            "crag_findings": [],
+            "citations": [],
             "deviations": [],
             "risk_score": 0.0,
             "status": "started",

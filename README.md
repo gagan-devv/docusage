@@ -4,18 +4,19 @@
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black.svg?logo=next.js&logoColor=white)](https://nextjs.org)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent_HITL-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent_CRAG-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![HuggingFace](https://img.shields.io/badge/HuggingFace-Llama--3.3--70B_%26_Qwen2.5--72B-FFD21E.svg?logo=huggingface&logoColor=black)](https://huggingface.co)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15_pgvector-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Resend](https://img.shields.io/badge/Resend-Email_OTP_Delivery-black.svg)](https://resend.com)
 [![Celery](https://img.shields.io/badge/Celery-5.3-37814A.svg?logo=celery&logoColor=white)](https://docs.celeryq.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose_Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
-[![Tests](https://img.shields.io/badge/Tests-48_Pytest_%26_14_Vitest_Passing-brightgreen.svg)](#testing--verification)
+[![Tests](https://img.shields.io/badge/Tests-54_Pytest_%26_16_Vitest_Passing-brightgreen.svg)](#testing--verification)
 
 ---
 
 ## Executive Overview
 
-**Docusage** is an enterprise-grade contract compliance platform designed to audit legal agreements against corporate policies and regulatory mandates. Combining **LangGraph** multi-agent state machines, native **PostgreSQL `pgvector`** semantic retrieval, **Celery** distributed ingestion queues, a **Next.js 16** legal reviewer, and a **Custom Seniority-Based RBAC engine**, Docusage eliminates manual contract auditing bottlenecks while keeping legal counsel firmly in control via deterministic human-in-the-loop (HITL) breakpoints and strict document access barriers.
+**Docusage** is an enterprise-grade contract compliance platform designed to audit legal agreements against corporate policies and regulatory mandates. Combining **LangGraph** multi-agent state machines, **Corrective RAG (CRAG)** retrieval grading, open-weights **Hugging Face** LLMs (`Llama-3.3-70B`, `Qwen2.5-72B`), native **PostgreSQL `pgvector`** semantic retrieval, **Celery** distributed ingestion queues, a **Next.js 16** legal reviewer, and a **Custom Seniority-Based RBAC engine**, Docusage eliminates manual contract auditing bottlenecks while keeping legal counsel firmly in control via deterministic human-in-the-loop (HITL) breakpoints, verbatim citation verification, and strict document access barriers.
 
 ```
                   ┌────────────────────────────────────────┐
@@ -31,12 +32,18 @@
                          │                          │
            Tasks Enqueue │            State Machine │ Interrupt / Resume
                          ▼                          ▼
-               ┌───────────────────┐      ┌───────────────────┐
-               │   Celery Worker   │      │ LangGraph Engine  │
-               │ (Chunk & Embed)   │      │  (Review Graph)   │
-               └─────────┬─────────┘      └─────────┬─────────┘
-                         │                          │
-                         └───────────┬──────────────┘
+               ┌───────────────────┐      ┌───────────────────────────┐
+               │   Celery Worker   │      │     LangGraph Engine      │
+               │ (Chunk & Embed)   │      │ (CRAG Grader & Auditor)   │
+               └─────────┬─────────┘      └─────────────┬─────────────┘
+                         │                              │
+                         │              HuggingFace API │ Llama-3.3-70B / Qwen2.5-72B
+                         │                              ▼
+                         │                     ┌───────────────────┐
+                         │                     │  HFInference      │
+                         │                     │  (CRAG LLM)       │
+                         │                     └─────────┬─────────┘
+                         └───────────┬───────────────────┘
                                      ▼
                ┌───────────────────────────────────────────┐
                │         PostgreSQL 15 + pgvector          │
@@ -48,11 +55,14 @@
 
 ## Key Capabilities
 
+- **Corrective RAG (CRAG) & Zero-Hallucination Citations**: Incorporates retrieval quality evaluation (`CORRECT`, `AMBIGUOUS`, `INCORRECT`), chunk strip-and-recompose filtering, and strict verbatim citation sanitization (`sanitize_citations`). When clauses do not exist in the source document, CRAG flags `MISSING_COVENANT` with 0 fake citations.
+- **Hugging Face Serverless LLM Integration**: Multi-model fallback cascading powered by `meta-llama/Llama-3.3-70B-Instruct`, `Qwen/Qwen2.5-72B-Instruct`, and `meta-llama/Llama-3.1-8B-Instruct` using standard `HF_TOKEN`.
+- **Dynamic Reviewer & Real Chunk Viewer**: Real document chunks (`GET /contracts/{id}/clauses`) rendered in `DocumentViewer.tsx` alongside live CRAG confidence scores, exact quotations, and suggested redlines.
 - **Passwordless Email + OTP Authentication (Resend)**: Passwordless verification codes dispatched via Resend API. Dual-token issuance: **30-minute Access Tokens** and **7-day Refresh Tokens** with replay-detection family rotation.
 - **Hierarchical Seniority-Based RBAC**: Numerical ranking ($1 - 100$) per role or member. Seniors ($P_{\text{user}} \ge P_{\text{creator}}$) automatically see documents created by juniors (Top-Down Visibility); juniors ($P_{\text{user}} < P_{\text{creator}}$) are blocked from seniors' contracts (Bottom-Up Restriction) unless explicit, revocable delegation grants are issued.
 - **Stateful Multi-Agent LangGraph Workflow**: Autonomous pipeline (`retriever` $\rightarrow$ `auditor` $\rightarrow$ `human_review` $\rightarrow$ `refine` $\rightarrow$ `finalize`) with conditional routing. High-risk contracts trigger an automatic breakpoint (`interrupt_before=["human_review"]`), pausing execution until legal counsel approves, rejects, or requests iterations.
 - **Dense Vector Search with Fallback**: Encodes text into 768-dimensional dense vectors using `sentence-transformers/all-mpnet-base-v2`. Queries leverage PostgreSQL native cosine distance operator (`<=>`), backed by zero-downtime in-memory NumPy fallback.
-- **Provider Manager & AES-256 Vault**: Dynamic model provider selection (Local Ollama, OpenAI, Anthropic, Gemini) with Fernet AES-256 encrypted key storage and UI key masking.
+- **Provider Manager & AES-256 Vault**: Dynamic model provider selection (Local Ollama, OpenAI, Anthropic, Gemini, Hugging Face) with Fernet AES-256 encrypted key storage and UI key masking.
 - **Interactive Legal Reviewer & Access Delegation**: Split-screen workbench pairing an in-browser clause viewer with interactive deviation highlights, live LangGraph state graphs, a floating **Decision Dock**, and an **Access Delegation Modal**.
 - **Enterprise Observability**: Real-time Prometheus metrics exposition (`/metrics`) tracking request volumes, evaluation statuses, and RAG search latencies, integrated with MLflow experiment logging.
 

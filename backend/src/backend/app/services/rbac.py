@@ -45,13 +45,19 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
     if user.is_admin or user.role.lower() in ("partner", "admin", "owner"):
         return True
 
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return True
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         # Fetch contract creator and org
         cursor.execute(
             "SELECT id, org_id, created_by_user_id, access_scope FROM contracts WHERE id = %s",
-            (str(contract_id),)
+            (valid_uuid,)
         )
         c_row = cursor.fetchone()
         if not c_row:
@@ -156,12 +162,18 @@ async def revoke_contract_access(contract_id: str, target_user_id: str, revoked_
     if not can_revoke:
         raise PermissionError("You do not have permission to revoke access for this contract.")
 
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return False
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             "DELETE FROM contract_access_grants WHERE contract_id = %s AND user_id = %s",
-            (str(contract_id), str(target_user_id))
+            (valid_uuid, str(target_user_id))
         )
         deleted = cursor.rowcount > 0
         conn.commit()
@@ -171,6 +183,12 @@ async def revoke_contract_access(contract_id: str, target_user_id: str, revoked_
         release_db_connection(conn)
 
 async def list_contract_grants(contract_id: str) -> List[Dict[str, Any]]:
+    try:
+        import uuid
+        valid_uuid = str(uuid.UUID(str(contract_id)))
+    except (ValueError, AttributeError):
+        return []
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -182,7 +200,7 @@ async def list_contract_grants(contract_id: str) -> List[Dict[str, Any]]:
             WHERE g.contract_id = %s
             ORDER BY g.granted_at DESC
             """,
-            (str(contract_id),)
+            (valid_uuid,)
         )
         rows = cursor.fetchall()
         cursor.close()

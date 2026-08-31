@@ -151,65 +151,67 @@ flowchart TD
 
 ---
 
-## 4. Multi-Agent LangGraph State Machine
+## 4. Multi-Agent Corrective RAG (CRAG) & LangGraph State Machine
 
-The compliance auditing intelligence is implemented using **LangGraph 1.2+** as a deterministic, check-pointed state machine.
+The compliance auditing intelligence is implemented using **LangGraph 1.2+** as a deterministic, check-pointed state machine enhanced with a **Corrective RAG (CRAG)** grading and citation pipeline.
 
 ### 4.1 State Schema (`ContractAnalysisState`)
 
 ```python
 class ContractAnalysisState(TypedDict):
-    contract_id: Union[str, int]             # Unique database UUID of the target contract
-    policy_id: int                           # Target policy definition being audited
-    thread_id: str                           # Isolated session checkpoint identifier
-    rules: List[Dict[str, Any]]              # Policy covenants evaluated
-    retrieved_clauses: Dict[str, List[str]]  # Semantic clauses mapped per rule
-    deviations: List[Dict[str, Any]]         # Identified missing or non-compliant clauses
-    risk_score: float                        # Calculated risk metric (0.0 to 1.0)
-    status: str                              # Current state node tag
-    human_action: Optional[str]              # 'approve' | 'reject' | 'revise' | None
-    human_feedback: Optional[str]            # Guidance provided by legal counsel
-    iteration_count: int                     # Number of refinement loops executed
-    max_iterations: int                      # Upper boundary to prevent infinite looping
+    contract_id: Union[str, int]                      # Unique database UUID of the target contract
+    policy_id: int                                    # Target policy definition being audited
+    thread_id: str                                    # Isolated session checkpoint identifier
+    rules: List[Dict[str, Any]]                       # Policy covenants evaluated
+    retrieved_clauses: Dict[str, List[str]]           # Semantic clauses mapped per rule
+    candidate_chunks: Dict[str, List[Dict[str, Any]]] # Full chunk metadata with IDs & raw texts
+    crag_findings: List[Dict[str, Any]]               # Structured findings with confidence & grades
+    citations: List[Dict[str, Any]]                   # Verbatim extracted quotes grounded in chunks
+    deviations: List[Dict[str, Any]]                  # Identified missing or non-compliant clauses
+    risk_score: float                                 # Calculated risk metric (0.0 to 1.0)
+    status: str                                       # Current state node tag
+    human_action: Optional[str]                       # 'approve' | 'reject' | 'revise' | None
+    human_feedback: Optional[str]                     # Guidance provided by legal counsel
+    iteration_count: int                              # Number of refinement loops executed
+    max_iterations: int                               # Upper boundary to prevent infinite looping
 ```
 
-### 4.2 StateGraph Node Topology & Transitions
+### 4.2 CRAG Pipeline Mechanics
 
 ```mermaid
 flowchart TD
-    START([START]) --> retriever[Agent: retriever_node]
-    retriever --> auditor[Agent: auditor_node]
-    
-    auditor --> cond1{Risk Score > 0.3?}
-    cond1 -- "No (Low Risk)" --> finalize[Agent: finalizer_node]
-    cond1 -- "Yes (High Risk)" --> human_review[Agent: human_review_node<br/><i>*BREAKPOINT INTERRUPT*</i>]
-    
-    human_review --> cond2{Counsel Decision}
-    cond2 -- "'revise' (Under max_iter)" --> refine[Agent: refinement_node]
-    cond2 -- "'approve' or 'reject'" --> finalize
-    
-    refine --> auditor
-    finalize --> END([END])
+    subgraph CRAG ["Corrective RAG (CRAG) Engine"]
+        ret[Candidate Chunk Retrieval] --> grade{Retrieval Grader LLM}
+        grade -- "CORRECT (High Quality)" --> filter[Strip Noise Chunks]
+        grade -- "AMBIGUOUS (Partial Context)" --> filter
+        grade -- "INCORRECT (Unrelated Doc)" --> missing[Mark MISSING_COVENANT<br/>0 Fake Citations]
+        
+        filter --> audit[Auditor LLM<br/>Llama-3.3-70B / Qwen2.5-72B]
+        audit --> sanitize[Verbatim Quote Sanitizer<br/><i>Exact Substring Invariant</i>]
+        sanitize --> findings[Structured CRAG Finding]
+        missing --> findings
+    end
 
-    classDef agent fill:#18181b,stroke:#52525b,stroke-width:1px,color:#f4f4f5;
-    classDef breakpoint fill:#3f3f46,stroke:#f59e0b,stroke-width:2px,color:#fbbf24;
-    classDef startend fill:#09090b,stroke:#27272a,stroke-width:1px,color:#a1a1aa;
-    classDef decision fill:#27272a,stroke:#71717a,stroke-width:1px,color:#e4e4e7;
-
-    class retriever,auditor,refine,finalize agent;
-    class human_review breakpoint;
-    class START,END startend;
-    class cond1,cond2 decision;
+    findings --> score[Compute Grounded Risk Score]
+    score --> human_eval{Risk > 0.3?}
+    human_eval -- "Yes" --> paused[Breakpoint: PAUSED_AT_HUMAN_REVIEW]
+    human_eval -- "No" --> finalized[Finalize & Log Evals]
 ```
+
+### 4.3 Grounding & Citation Invariant
+1. **Verbatim Quotation Invariant:** The `sanitize_citations` filter scans all LLM-extracted citations against the original document chunk text. Any quote not physically present in the source text is purged.
+2. **Missing Covenant Accuracy:** When an uploaded document (e.g. an institutional permission letter or facility MoU) lacks commercial clauses like "Limitation of Liability", CRAG outputs `status="MISSING_COVENANT"`, `retrieval_grade="INCORRECT"`, and generates **0 fake citations** with high confidence.
 
 ---
 
 ## 5. Document Ingestion & Vector Storage Pipeline
 
-### 5.1 Multi-Format Extraction
-- **PDF Documents**: Parsed with `pdfplumber`. Extracts text while preserving tables as markdown format.
+### 5.1 Multi-Format Extraction & Sanitization
+- **PDF Documents**: Parsed with `pdfplumber`. Extracts text while preserving tables.
+- **NUL Character Sanitization**: Strips `\x00` null bytes from extracted PDF strings to prevent PostgreSQL insertion exceptions (`ValueError: A string literal cannot contain NUL (0x00) characters`).
 - **DOCX Documents**: Parsed with `python-docx`. Iterates paragraphs and table cells sequentially.
 - **Plain Text**: Read directly using UTF-8 decoding with fallback error replacement.
+- **Ingestion Fallback**: If Celery message brokers are temporarily offline, `upload_contract` seamlessly executes immediate local database chunking and embedding.
 
 ### 5.2 Embedding Model & Dense Vector Dimensions
 - Uses **Sentence Transformers** `all-mpnet-base-v2` (`768` dimensions).

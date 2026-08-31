@@ -27,12 +27,16 @@ async def upload_contract(file: UploadFile = File(...), user: CurrentUser = Depe
         org_id=user.org_id,
         created_by_user_id=user.id,
     )
-    # ponytail: try celery task first, silent fallback if worker offline
+    # ponytail: try celery task first, silent fallback to local ingest if worker offline
     try:
         from src.backend.worker.tasks import ingest_contract_task
         ingest_contract_task.delay(contract.id, file_path)
     except Exception:
-        pass
+        try:
+            from src.backend.worker.tasks import ingest_contract
+            ingest_contract(contract.id, file_path)
+        except Exception:
+            pass
 
     return contract
 
@@ -77,6 +81,16 @@ async def get_evals_for_contract(contract_id: str, user: CurrentUser = Depends(g
 
     from src.backend.app.services.contracts import get_contract_evals
     return await get_contract_evals(contract_id)
+
+@router.get("/{contract_id}/clauses")
+async def get_clauses_for_contract(contract_id: str, user: CurrentUser = Depends(get_current_user)):
+    from src.backend.app.services.rbac import check_contract_access
+    can_access = await check_contract_access(user, contract_id)
+    if not can_access:
+        raise HTTPException(status_code=403, detail="Forbidden: Insufficient seniority priority or access permissions")
+
+    from src.backend.app.services.contracts import get_contract_clauses_list
+    return await get_contract_clauses_list(contract_id)
 
 @router.delete("/{contract_id}", status_code=204)
 async def remove_contract(contract_id: str):
