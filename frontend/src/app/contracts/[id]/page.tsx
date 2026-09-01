@@ -8,7 +8,7 @@ import { PolicyInspector } from "@/components/reviewer/PolicyInspector";
 import { DecisionDock } from "@/components/reviewer/DecisionDock";
 import { api } from "@/lib/api";
 import { Contract, Policy, GraphState, ContractClause, ClauseHighlight } from "@/types";
-import { ArrowLeft, UserPlus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, UserPlus, ShieldCheck, Download, FileText } from "lucide-react";
 import Link from "next/link";
 import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
 
@@ -31,6 +31,43 @@ export default function ContractReviewPage() {
   const [notice, setNotice] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
 
+  const handleExportPdf = async () => {
+    try {
+      setNotice({ msg: "Generating PDF Compliance Certificate...", type: "info" });
+      const blob = await api.downloadExportPdf(contractId, selectedPolicyId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Docusage_Audit_${contract?.name || contractId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setNotice({ msg: "PDF Compliance Certificate downloaded!", type: "success" });
+    } catch (err: any) {
+      setNotice({ msg: err.message || "Failed to export PDF", type: "error" });
+    }
+  };
+
+  const handleExportJson = async () => {
+    try {
+      const data = await api.getAuditJson(contractId, selectedPolicyId);
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Docusage_Audit_${contract?.name || contractId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setNotice({ msg: "JSON Audit Payload downloaded!", type: "success" });
+    } catch (err: any) {
+      setNotice({ msg: err.message || "Failed to export JSON", type: "error" });
+    }
+  };
+
   // Load policies
   useEffect(() => {
     api
@@ -50,7 +87,17 @@ export default function ContractReviewPage() {
     api
       .getContract(contractId)
       .then((c) => {
-        if (c) setContract(c);
+        if (c && c.id) {
+          setContract(c);
+        } else {
+          setContract({
+            id: contractId,
+            name: "Contract_Document.pdf",
+            file_path: `data/contracts/${contractId}.pdf`,
+            metadata: { size: 245000, pages: 1 },
+            created_at: new Date().toISOString(),
+          });
+        }
       })
       .catch((err) => {
         console.warn("Failed to fetch contract details, setting fallback:", err);
@@ -229,6 +276,25 @@ export default function ContractReviewPage() {
             <UserPlus className="w-3.5 h-3.5 text-amber-400" />
             <span>Delegate Access</span>
           </button>
+
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-200 border border-emerald-700/60 transition-colors font-mono text-[11px]"
+            title="Download PDF Compliance Certificate with CRAG Citations"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Export PDF</span>
+          </button>
+
+          <button
+            onClick={handleExportJson}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors font-mono text-[11px]"
+            title="Download JSON Audit Findings Payload"
+          >
+            <FileText className="w-3.5 h-3.5 text-amber-400" />
+            <span>JSON</span>
+          </button>
+
           <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
           <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
             Interactive CRAG Mode

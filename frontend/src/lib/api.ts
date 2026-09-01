@@ -267,4 +267,19 @@ export const api = {
       method: "DELETE",
     });
   },
+
+  // Audit Export Methods
+  async downloadExportPdf(contractId: string, policyId: number = 1): Promise<Blob> {
+    const token = typeof window !== "undefined" ? localStorage.getItem("docusage_token") : null;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${API_BASE}/contracts/${contractId}/export?policy_id=${policyId}&format=pdf`, {
+      headers,
+    });
+    if (!res.ok) throw new Error("Failed to download audit PDF certificate");
+    return res.blob();
+  },
+
+  async getAuditJson(contractId: string, policyId: number = 1): Promise<any> {
+    return fetchJson(`/contracts/${contractId}/export?policy_id=${policyId}&format=json`);
+  },
 };

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Response
 from src.backend.app.services.contracts import save_contract, get_contract
 from src.backend.app.models.contracts import ContractCreate, ContractResponse, EvalResponse
 from src.backend.app.routes.auth import get_current_user
@@ -145,3 +145,30 @@ async def analyze_contract(contract_id: str, policy_id: int):
     session_id = f"sync-{contract_id}-{policy_id}-{uuid.uuid4().hex[:6]}"
     result = engine.start_review(contract_id=contract_id, policy_id=policy_id, thread_id=session_id)
     return result
+
+
+@router.get("/{contract_id}/export")
+async def export_contract_audit(
+    contract_id: str,
+    policy_id: Optional[int] = 1,
+    format: Optional[str] = "json",
+    user: CurrentUser = Depends(get_current_user)
+):
+    from src.backend.app.services.export import generate_audit_json_data, generate_audit_pdf_bytes
+    from src.backend.app.services.rbac import check_contract_access
+
+    can_access = await check_contract_access(user, contract_id)
+    if not can_access:
+        raise HTTPException(status_code=403, detail="Forbidden: Insufficient seniority priority or access permissions")
+
+    if format and format.lower() == "pdf":
+        pdf_bytes = await generate_audit_pdf_bytes(contract_id, policy_id)
+        filename = f"Docusage_Audit_{contract_id[:8]}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    else:
+        json_data = await generate_audit_json_data(contract_id, policy_id)
+        return json_data

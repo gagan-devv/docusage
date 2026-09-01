@@ -61,6 +61,12 @@ contract_evaluations_total = get_or_create_counter(
     labelnames=("status",)
 )
 
+audit_exports_total = get_or_create_counter(
+    name="audit_exports_total",
+    documentation="Total count of audit report exports downloaded by format",
+    labelnames=("format",)
+)
+
 rag_search_duration_seconds = get_or_create_histogram(
     name="rag_search_duration_seconds",
     documentation="Duration of RAG clause retrieval and vector searches in seconds",
@@ -70,6 +76,7 @@ rag_search_duration_seconds = get_or_create_histogram(
 # Uppercase aliases for conventional naming
 HTTP_REQUESTS_TOTAL = http_requests_total
 CONTRACT_EVALUATIONS_TOTAL = contract_evaluations_total
+AUDIT_EXPORTS_TOTAL = audit_exports_total
 RAG_SEARCH_DURATION_SECONDS = rag_search_duration_seconds
 
 
