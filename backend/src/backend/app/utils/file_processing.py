@@ -49,3 +49,27 @@ def process_uploaded_file(
         return read_txt(file_path)
     else:
         raise ValueError(f"Unsupported file format: {file_path}")
+
+
+def read_document_pages(file_path: str) -> List[dict]:
+    """Extract pages with page numbers and clean text."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File {file_path} doesn't exist.")
+
+    pages = []
+    if file_path.endswith(".pdf"):
+        with pdfplumber.open(file_path) as pdf:
+            for page_num, page in enumerate(pdf.pages, start=1):
+                txt = page.extract_text() or ""
+                pages.append({"page_number": page_num, "text": txt.replace("\x00", "")})
+    elif file_path.endswith(".docx"):
+        doc = Document(file_path)
+        full_txt = "\n".join([p.text for p in doc.paragraphs]).replace("\x00", "")
+        pages.append({"page_number": 1, "text": full_txt})
+    elif file_path.endswith(".txt"):
+        with open(file_path, "r", encoding="utf-8") as f:
+            full_txt = f.read().replace("\x00", "")
+        pages.append({"page_number": 1, "text": full_txt})
+    else:
+        raise ValueError(f"Unsupported file format: {file_path}")
+    return pages

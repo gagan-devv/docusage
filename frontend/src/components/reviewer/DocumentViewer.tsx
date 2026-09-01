@@ -241,37 +241,58 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               </div>
             ) : (
               clauses.map((clause, idx) => {
+                const prevClause = idx > 0 ? clauses[idx - 1] : null;
+                const isNewPage = idx === 0 || (clause.page_number && prevClause?.page_number !== clause.page_number);
                 const hasActiveQuote =
                   activeCitationQuote &&
                   clause.text.toLowerCase().includes(activeCitationQuote.toLowerCase().trim());
 
                 return (
-                  <div
-                    key={clause.id || idx}
-                    ref={(el) => {
-                      chunkRefs.current[idx] = el;
-                    }}
-                    className={`p-4 rounded-lg border transition-all ${
-                      hasActiveQuote
-                        ? "border-amber-500/70 bg-[#1e1a14] ring-1 ring-amber-500/40 shadow-lg"
-                        : "border-[#27272a] bg-[#151518] hover:border-zinc-600"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-zinc-400">
-                      <span className="font-semibold text-zinc-300 flex items-center space-x-1.5">
-                        <span>#CHUNK {idx + 1}</span>
-                        <span className="text-zinc-600">•</span>
-                        <span>DB ID: {clause.id}</span>
-                        {hasActiveQuote && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px]">
-                            Matching Citation Target
-                          </span>
-                        )}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
-                        {clause.clause_type || "Extracted Clause"}
-                      </span>
-                    </div>
+                  <React.Fragment key={clause.id || idx}>
+                    {isNewPage && clause.page_number && (
+                      <div className="flex items-center space-x-2 py-1 my-1">
+                        <div className="h-px bg-zinc-800/80 flex-1" />
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded shadow-sm">
+                          Document Page {clause.page_number}
+                        </span>
+                        <div className="h-px bg-zinc-800/80 flex-1" />
+                      </div>
+                    )}
+                    <div
+                      ref={(el) => {
+                        chunkRefs.current[idx] = el;
+                      }}
+                      className={`p-4 rounded-lg border transition-all ${
+                        hasActiveQuote
+                          ? "border-amber-500/70 bg-[#1e1a14] ring-1 ring-amber-500/40 shadow-lg"
+                          : "border-[#27272a] bg-[#151518] hover:border-zinc-600"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-zinc-400">
+                        <span className="font-semibold text-zinc-300 flex items-center space-x-1.5 truncate max-w-md">
+                          <span>#CHUNK {idx + 1}</span>
+                          {clause.page_number && (
+                            <>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-amber-400/90 font-medium">Page {clause.page_number}</span>
+                            </>
+                          )}
+                          {clause.section_header && clause.section_header !== "Document" && (
+                            <>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-zinc-300 truncate max-w-xs">{clause.section_header}</span>
+                            </>
+                          )}
+                          {hasActiveQuote && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] shrink-0">
+                              Matching Citation Target
+                            </span>
+                          )}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 shrink-0">
+                          {clause.clause_type || "Extracted Clause"}
+                        </span>
+                      </div>
                     <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-zinc-300 bg-black/30 p-3 rounded border border-zinc-800/80">
                       {activeCitationQuote && hasActiveQuote ? (
                         (() => {
@@ -300,6 +321,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                       )}
                     </div>
                   </div>
+                </React.Fragment>
                 );
               })
             )}

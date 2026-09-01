@@ -289,3 +289,72 @@ async def test_refine_findings_with_counsel_waivers():
         assert len(res["findings"][0].citations) == 1
         assert res["findings"][0].citations[0].exact_quote == "courts in Gwalior shall have exclusive jurisdiction"
 
+
+def test_hierarchical_chunk_document_detects_sections():
+    from src.backend.app.utils.helpers import hierarchical_chunk_document
+
+    sample_doc = (
+        "MEMORANDUM OF UNDERSTANDING\n\n"
+        "1. DEFINITIONS\n"
+        "Agreement means this document.\n\n"
+        "7. TERMS OF AGREEMENT\n"
+        "7.1 The Institution shall disburse 70% advance payment.\n"
+        "7.2 All disputes shall be settled in Gwalior courts.\n\n"
+        "SCHEDULE A - PRICING\n"
+        "Total Fee: Rs. 1,00,000"
+    )
+
+    chunks = hierarchical_chunk_document(sample_doc, max_chunk_size=300)
+    assert len(chunks) >= 3
+    section_headers = [c["section_header"] for c in chunks]
+    assert any("7. TERMS OF AGREEMENT" in h for h in section_headers)
+    assert any("1. DEFINITIONS" in h for h in section_headers)
+    assert any("SCHEDULE A" in h for h in section_headers)
+
+
+def test_compute_bm25_sparse_scores_numeric_boosting():
+    from src.backend.app.services.rag import compute_bm25_sparse_scores
+
+    chunks = [
+        {"id": 1, "text": "We request a general budget allocation for events."},
+        {"id": 2, "text": "We request 70% of the amount to be released in advance."},
+        {"id": 3, "text": "The total fee is $50,000 for production."},
+    ]
+
+    scores_70 = compute_bm25_sparse_scores("advance payment cap 70%", chunks)
+    assert scores_70[1] > scores_70[0]
+    assert scores_70[1] > scores_70[2]
+
+    scores_50k = compute_bm25_sparse_scores("production fee $50,000", chunks)
+    assert scores_50k[2] > scores_50k[0]
+
+
+@pytest.mark.anyio
+async def test_execute_crag_audit_pipeline_concurrent():
+    rules = [
+        {"name": "Rule 1", "query": "q1", "threshold": 0.5},
+        {"name": "Rule 2", "query": "q2", "threshold": 0.5},
+        {"name": "Rule 3", "query": "q3", "threshold": 0.5},
+    ]
+    candidate_chunks = {
+        "Rule 1": [{"id": 1, "text": "Clause 1"}],
+        "Rule 2": [{"id": 2, "text": "Clause 2"}],
+        "Rule 3": [{"id": 3, "text": "Clause 3"}],
+    }
+
+    with patch("src.backend.app.services.crag.grade_retrieval_quality", new_callable=AsyncMock) as mock_grade, \
+         patch("src.backend.app.services.crag.audit_covenant_crag", new_callable=AsyncMock) as mock_audit:
+
+        mock_grade.return_value = CRAGEvaluationResult(
+            rule_name="Mock", retrieval_grade="CORRECT", confidence=0.95, relevant_chunk_indices=[0]
+        )
+        mock_audit.return_value = CRAGFinding(
+            rule_name="Mock", status="SATISFIED", confidence_score=0.95, citations=[], rationale="Mock covenant satisfied"
+        )
+
+        findings = await execute_crag_audit_pipeline(rules, candidate_chunks, concurrency_limit=3)
+        assert len(findings) == 3
+        assert mock_grade.call_count == 3
+        assert mock_audit.call_count == 3
+
+

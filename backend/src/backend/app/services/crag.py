@@ -1,4 +1,5 @@
 import json
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -296,31 +297,37 @@ Audit this covenant against the verified chunks."""
 async def execute_crag_audit_pipeline(
     rules: List[Dict[str, Any]],
     candidate_chunks_by_rule: Dict[str, List[Dict[str, Any]]],
-    contract_metadata: Optional[Dict[str, Any]] = None
+    contract_metadata: Optional[Dict[str, Any]] = None,
+    concurrency_limit: int = 5
 ) -> List[CRAGFinding]:
-    """Execute the full CRAG pipeline across all rules in parallel/sequential batches."""
-    findings = []
-    
-    for rule in rules:
-        r_name = rule.get("name", "rule")
-        raw_chunks = candidate_chunks_by_rule.get(r_name, [])
-        
-        # Step 1: Retrieval Quality Grading
-        eval_res = await grade_retrieval_quality(rule, raw_chunks)
-        
-        # Step 2: Knowledge Strip-and-Recompose
-        filtered_chunks = filter_and_recompose_chunks(raw_chunks, eval_res)
-        
-        # Step 3: Grounded Audit with Citations
-        finding = await audit_covenant_crag(
-            rule=rule,
-            chunks=filtered_chunks,
-            eval_result=eval_res,
-            contract_metadata=contract_metadata
-        )
-        findings.append(finding)
+    """Execute the full CRAG pipeline concurrently across all rules with concurrency bounding."""
+    if not rules:
+        return []
 
-    return findings
+    sem = asyncio.Semaphore(concurrency_limit)
+
+    async def audit_single_rule(rule: Dict[str, Any]) -> CRAGFinding:
+        async with sem:
+            r_name = rule.get("name", "rule")
+            raw_chunks = candidate_chunks_by_rule.get(r_name, [])
+            
+            # Step 1: Retrieval Quality Grading
+            eval_res = await grade_retrieval_quality(rule, raw_chunks)
+            
+            # Step 2: Knowledge Strip-and-Recompose
+            filtered_chunks = filter_and_recompose_chunks(raw_chunks, eval_res)
+            
+            # Step 3: Grounded Audit with Citations
+            finding = await audit_covenant_crag(
+                rule=rule,
+                chunks=filtered_chunks,
+                eval_result=eval_res,
+                contract_metadata=contract_metadata
+            )
+            return finding
+
+    findings = await asyncio.gather(*(audit_single_rule(r) for r in rules))
+    return list(findings)
 
 
 CLASSIFIER_SYSTEM_PROMPT = """You are a Legal Document Classifier.

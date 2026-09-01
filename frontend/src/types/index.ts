@@ -40,6 +40,8 @@ export interface ContractClause {
   text: string;
   clause_type?: string;
   entities?: Record<string, any>;
+  page_number?: number;
+  section_header?: string;
 }
 
 export interface CRAGCitation {

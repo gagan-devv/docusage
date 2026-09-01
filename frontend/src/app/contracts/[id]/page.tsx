@@ -15,7 +15,8 @@ import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
 export default function ContractReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const contractId = (params?.id as string) || "1";
+  const rawId = params?.id;
+  const contractId = Array.isArray(rawId) ? rawId[0] : (rawId as string) || "";
 
   const [contract, setContract] = useState<Contract | null>(null);
   const [clauses, setClauses] = useState<ContractClause[]>([]);
@@ -43,11 +44,16 @@ export default function ContractReviewPage() {
   }, []);
 
   useEffect(() => {
+    if (!contractId) return;
+
     // 1. Load contract details
     api
       .getContract(contractId)
-      .then((c) => setContract(c))
-      .catch(() => {
+      .then((c) => {
+        if (c) setContract(c);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch contract details, setting fallback:", err);
         setContract({
           id: contractId,
           name: "Contract_Document.pdf",
@@ -60,12 +66,14 @@ export default function ContractReviewPage() {
     // 2. Load actual extracted document chunks
     api
       .getContractClauses(contractId)
-      .then((cls) => setClauses(cls))
+      .then((cls) => setClauses(cls || []))
       .catch(() => setClauses([]));
   }, [contractId]);
 
   // 3. Start or inspect LangGraph review session with selected policy
   useEffect(() => {
+    if (!contractId) return;
+
     const activeThreadId = `contract-${contractId}-pol${selectedPolicyId}-session`;
     setThreadId(activeThreadId);
 

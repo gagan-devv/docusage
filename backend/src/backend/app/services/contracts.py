@@ -205,15 +205,19 @@ async def get_contract_clauses_list(contract_id: str) -> list[dict]:
         )
         rows = cursor.fetchall()
         cursor.close()
-        return [
-            {
+        result = []
+        for r in rows:
+            raw_ent = r[4]
+            ent_dict = raw_ent if isinstance(raw_ent, dict) else json.loads(raw_ent) if isinstance(raw_ent, str) and raw_ent.startswith("{") else {}
+            result.append({
                 "id": r[0],
                 "contract_id": str(r[1]),
                 "text": r[2],
                 "clause_type": r[3] or "Clause",
-                "entities": r[4] or {},
-            }
-            for r in rows
-        ]
+                "entities": ent_dict,
+                "page_number": ent_dict.get("page_number", 1),
+                "section_header": ent_dict.get("section_header", "Document"),
+            })
+        return result
     finally:
         release_db_connection(conn)

@@ -10,7 +10,7 @@
 [![Resend](https://img.shields.io/badge/Resend-Email_OTP_Delivery-black.svg)](https://resend.com)
 [![Celery](https://img.shields.io/badge/Celery-5.3-37814A.svg?logo=celery&logoColor=white)](https://docs.celeryq.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose_Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
-[![Tests](https://img.shields.io/badge/Tests-54_Pytest_%26_16_Vitest_Passing-brightgreen.svg)](#testing--verification)
+[![Tests](https://img.shields.io/badge/Tests-59_Pytest_%26_18_Vitest_Passing-brightgreen.svg)](#testing--verification)
 
 ---
 
@@ -55,9 +55,11 @@
 
 ## Key Capabilities
 
-- **Corrective RAG (CRAG) & Zero-Hallucination Citations**: Incorporates retrieval quality evaluation (`CORRECT`, `AMBIGUOUS`, `INCORRECT`), chunk strip-and-recompose filtering, and strict verbatim citation sanitization (`sanitize_citations`). When clauses do not exist in the source document, CRAG flags `MISSING_COVENANT` with 0 fake citations.
+- **Corrective RAG (CRAG) & Zero-Hallucination Citations**: Incorporates retrieval quality evaluation (`CORRECT`, `AMBIGUOUS`, `INCORRECT`), parallel batch evaluation via `asyncio.gather` with `Semaphore(5)` concurrency control, chunk strip-and-recompose filtering, and strict verbatim citation sanitization (`sanitize_citations`). When covenants do not exist, CRAG flags `MISSING_COVENANT` with 0 fake citations.
+- **Hierarchical Document Chunking**: Structure-aware legal parser (`hierarchical_chunk_document`) detecting sections (`SECTION`, `ARTICLE`, `7. TERMS OF AGREEMENT`, `SCHEDULE`) and preserving section breadcrumbs without breaking sentences.
+- **Hybrid Dense pgvector + Sparse BM25 RRF Retrieval**: Combines 768-dimensional dense vector embeddings with sparse token frequency matching (BM25) fused via Reciprocal Rank Fusion ($k=60.0$) with 2.5x numerical boosting for exact monetary, cap percentage, and jurisdictional queries.
 - **Hugging Face Serverless LLM Integration**: Multi-model fallback cascading powered by `meta-llama/Llama-3.3-70B-Instruct`, `Qwen/Qwen2.5-72B-Instruct`, and `meta-llama/Llama-3.1-8B-Instruct` using standard `HF_TOKEN`.
-- **Dynamic Reviewer & Real Chunk Viewer**: Real document chunks (`GET /contracts/{id}/clauses`) rendered in `DocumentViewer.tsx` alongside live CRAG confidence scores, exact quotations, and suggested redlines.
+- **Dynamic Reviewer & Multi-Page Chunk Viewer**: Real document chunks (`GET /contracts/{id}/clauses`) rendered with page divider badges (`Document Page X`), section headers, deep-link quotation highlights, and dynamic policy switching (`POLICY:` dropdown).
 - **Passwordless Email + OTP Authentication (Resend)**: Passwordless verification codes dispatched via Resend API. Dual-token issuance: **30-minute Access Tokens** and **7-day Refresh Tokens** with replay-detection family rotation.
 - **Hierarchical Seniority-Based RBAC**: Numerical ranking ($1 - 100$) per role or member. Seniors ($P_{\text{user}} \ge P_{\text{creator}}$) automatically see documents created by juniors (Top-Down Visibility); juniors ($P_{\text{user}} < P_{\text{creator}}$) are blocked from seniors' contracts (Bottom-Up Restriction) unless explicit, revocable delegation grants are issued.
 - **Stateful Multi-Agent LangGraph Workflow**: Autonomous pipeline (`retriever` $\rightarrow$ `auditor` $\rightarrow$ `human_review` $\rightarrow$ `refine` $\rightarrow$ `finalize`) with conditional routing. High-risk contracts trigger an automatic breakpoint (`interrupt_before=["human_review"]`), pausing execution until legal counsel approves, rejects, or requests iterations.

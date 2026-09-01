@@ -104,4 +104,38 @@ describe("CRAG Reviewer UI Components", () => {
     expect(screen.getByText("Permission to Use Convention Centre")).toBeDefined();
     expect(screen.getByText("Matching Citation Target")).toBeDefined();
   });
+
+  it("renders page markers and section headers in raw chunks view", () => {
+    const multiPageClauses: ContractClause[] = [
+      {
+        id: 10,
+        contract_id: "test-contract-1",
+        text: "Section 1 preamble text",
+        clause_type: "Preamble",
+        page_number: 1,
+        section_header: "1. PREAMBLE"
+      },
+      {
+        id: 11,
+        contract_id: "test-contract-1",
+        text: "Section 7 terms text",
+        clause_type: "Clause",
+        page_number: 2,
+        section_header: "7. TERMS OF AGREEMENT"
+      }
+    ];
+
+    render(
+      <DocumentViewer
+        contract={mockContract}
+        clauses={multiPageClauses}
+        highlightedClauses={mockHighlights}
+        activeCitationQuote="terms text"
+      />
+    );
+
+    expect(screen.getByText("Document Page 1")).toBeDefined();
+    expect(screen.getByText("Document Page 2")).toBeDefined();
+    expect(screen.getByText("7. TERMS OF AGREEMENT")).toBeDefined();
+  });
 });
