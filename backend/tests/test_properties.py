@@ -169,3 +169,44 @@ def test_fastapi_gateway_root():
     response = client.get("/")
     assert response.status_code == 200
     assert "docs_url" in response.json()
+
+
+# ----------------------------------------------------------------------
+# Property 11: BM25 Sparse & RRF Ranking Invariants
+# ----------------------------------------------------------------------
+
+@given(query=st.text(min_size=3, max_size=40))
+def test_bm25_sparse_scores_non_negative_invariant(query: str):
+    """Property: BM25 sparse scores must always be non-negative real numbers."""
+    from src.backend.app.services.rag import compute_bm25_sparse_scores
+
+    chunks = [
+        {"id": 1, "text": "This MOU is governed by the laws of India and subject to Gwalior jurisdiction."},
+        {"id": 2, "text": "Advance disbursement cap of 70% shall apply to all logistics requests."},
+        {"id": 3, "text": "Uncapped liability for data security breaches and gross negligence."}
+    ]
+
+    scores = compute_bm25_sparse_scores(query, chunks)
+    assert len(scores) == len(chunks)
+    for score in scores:
+        assert score >= 0.0
+
+
+# ----------------------------------------------------------------------
+# Property 12: Hierarchical Chunking Token Preservation Invariant
+# ----------------------------------------------------------------------
+
+@given(doc_text=st.text(min_size=10, max_size=500))
+def test_hierarchical_chunking_token_preservation_invariant(doc_text: str):
+    """Property: Hierarchical chunking must preserve non-whitespace tokens without loss."""
+    from src.backend.app.utils.helpers import hierarchical_chunk_document
+
+    chunks = hierarchical_chunk_document(doc_text, max_chunk_size=150)
+    if doc_text.strip():
+        assert len(chunks) >= 1
+        combined_chunks = " ".join([c["text"] for c in chunks])
+        # Ensure all alphanumeric words from original appear in combined output
+        words = [w for w in doc_text.split() if w.isalnum()]
+        for w in words:
+            assert w in combined_chunks
+
