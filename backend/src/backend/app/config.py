@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     embedding_model_name: str = Field(default="sentence-transformers/all-mpnet-base-v2", validation_alias="EMBEDDING_MODEL_NAME")
     resend_api_key: str = Field(default="", validation_alias="RESEND_API_KEY")
     resend_from_email: str = Field(default="Docusage Security <onboarding@resend.dev>", validation_alias="RESEND_FROM_EMAIL")
+    enable_multi_vector: bool = Field(default=True, validation_alias="ENABLE_MULTI_VECTOR")
+    enable_reranker: bool = Field(default=False, validation_alias="ENABLE_RERANKER")
 
     model_config = SettingsConfigDict(
         env_file=".env",

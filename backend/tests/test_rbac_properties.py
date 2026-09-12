@@ -17,7 +17,7 @@ def evaluate_access_pure(
         return True
     if has_explicit_grant:
         return True
-    return user_priority >= creator_priority
+    return user_priority > creator_priority
 
 @given(
     user_priority=st.integers(min_value=1, max_value=49),
@@ -48,16 +48,16 @@ def test_junior_barrier_invariant(user_priority, creator_priority, has_explicit_
         assert can_access is True
 
 @given(
-    user_priority=st.integers(min_value=50, max_value=100),
+    user_priority=st.integers(min_value=51, max_value=100),
     creator_priority=st.integers(min_value=1, max_value=50),
     has_explicit_grant=st.booleans(),
 )
 def test_senior_dominance_invariant(user_priority, creator_priority, has_explicit_grant):
     """
-    Property: A senior (priority >= creator) ALWAYS has access to junior/peer contracts.
+    Property: A superior (priority > creator) ALWAYS has access to subordinate contracts.
     """
-    user_id = "user-senior"
-    creator_id = "user-junior"
+    user_id = "user-superior"
+    creator_id = "user-subordinate"
     is_admin = False
 
     can_access = evaluate_access_pure(
@@ -69,6 +69,23 @@ def test_senior_dominance_invariant(user_priority, creator_priority, has_explici
         has_explicit_grant=has_explicit_grant,
     )
     assert can_access is True
+
+@given(
+    priority=st.integers(min_value=1, max_value=100),
+)
+def test_peer_isolation_invariant(priority):
+    """
+    Property: A peer with priority EQUAL to creator (and different user ID) CANNOT access the contract without explicit grant.
+    """
+    can_access = evaluate_access_pure(
+        user_id="peer-user-1",
+        user_priority=priority,
+        is_admin=False,
+        creator_id="peer-user-2",
+        creator_priority=priority,
+        has_explicit_grant=False,
+    )
+    assert can_access is False
 
 @given(
     user_priority=st.integers(min_value=1, max_value=100),

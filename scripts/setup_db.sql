@@ -92,14 +92,34 @@ CREATE TABLE IF NOT EXISTS auth_otp_codes (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- 9. Parent Documents (Hierarchical Contract Sections for MultiVectorRetriever)
+CREATE TABLE IF NOT EXISTS parent_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    contract_id UUID REFERENCES contracts(id) ON DELETE CASCADE,
+    section_header VARCHAR(500) NOT NULL,
+    clause_type VARCHAR(100) DEFAULT 'Section',
+    text TEXT NOT NULL,
+    embedding vector(768),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_parent_documents_contract_id ON parent_documents(contract_id);
+CREATE INDEX IF NOT EXISTS idx_parent_documents_embedding ON parent_documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- 10. Document Clauses (Child Chunks)
 CREATE TABLE IF NOT EXISTS clauses (
     id SERIAL PRIMARY KEY,
     contract_id UUID REFERENCES contracts(id) ON DELETE CASCADE,
+    parent_document_id UUID REFERENCES parent_documents(id) ON DELETE SET NULL,
     text TEXT NOT NULL,
     clause_type VARCHAR(100),
     entities JSONB,
     embedding vector(768)
 );
+
+ALTER TABLE clauses ADD COLUMN IF NOT EXISTS parent_document_id UUID REFERENCES parent_documents(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_clauses_parent_doc_id ON clauses(parent_document_id);
 
 CREATE TABLE IF NOT EXISTS policies (
     id SERIAL PRIMARY KEY,

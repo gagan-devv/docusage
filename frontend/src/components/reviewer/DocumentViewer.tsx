@@ -283,6 +283,14 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                               <span className="text-zinc-300 truncate max-w-xs">{clause.section_header}</span>
                             </>
                           )}
+                          {clause.parent_document_id && (
+                            <>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-emerald-400/90 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px]">
+                                Full Parent Section Context
+                              </span>
+                            </>
+                          )}
                           {hasActiveQuote && (
                             <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] shrink-0">
                               Matching Citation Target

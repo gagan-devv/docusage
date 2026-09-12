@@ -305,11 +305,23 @@ async def execute_crag_audit_pipeline(
         return []
 
     sem = asyncio.Semaphore(concurrency_limit)
+    from src.backend.app.config import settings
 
     async def audit_single_rule(rule: Dict[str, Any]) -> CRAGFinding:
         async with sem:
             r_name = rule.get("name", "rule")
-            raw_chunks = candidate_chunks_by_rule.get(r_name, [])
+            contract_id = contract_metadata.get("contract_id") if contract_metadata else None
+            
+            if settings.enable_multi_vector and contract_id:
+                from src.backend.app.services.multi_vector_retriever import multi_vector_retriever
+                raw_chunks_dicts = await multi_vector_retriever.retrieve_clauses(
+                    query=r_name,
+                    contract_id=contract_id,
+                    top_k=5
+                )
+                raw_chunks = [{"id": c.get("id"), "text": c["text"]} for c in raw_chunks_dicts]
+            else:
+                raw_chunks = candidate_chunks_by_rule.get(r_name, [])
             
             # Step 1: Retrieval Quality Grading
             eval_res = await grade_retrieval_quality(rule, raw_chunks)

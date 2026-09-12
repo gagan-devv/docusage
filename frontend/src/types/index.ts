@@ -42,6 +42,7 @@ export interface ContractClause {
   entities?: Record<string, any>;
   page_number?: number;
   section_header?: string;
+  parent_document_id?: string;
 }
 
 export interface CRAGCitation {

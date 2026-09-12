@@ -114,7 +114,7 @@ async def list_contracts(
                         FROM organization_members m
                         JOIN organization_roles r ON m.role_id = r.id
                         WHERE m.user_id = %s
-                    ), 0) >= COALESCE((
+                    ), 0) > COALESCE((
                         SELECT COALESCE(m2.custom_priority_override, r2.priority)
                         FROM organization_members m2
                         JOIN organization_roles r2 ON m2.role_id = r2.id

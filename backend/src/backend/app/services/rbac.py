@@ -96,7 +96,7 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
             cursor.close()
             return True
 
-        # Evaluate Seniority: User Priority >= Creator Priority
+        # Evaluate Seniority: User Priority > Creator Priority (Superiors only)
         cursor.execute(
             """
             SELECT COALESCE(m.custom_priority_override, r.priority)
@@ -110,7 +110,7 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
         cursor.close()
 
         creator_priority = creator_row[0] if creator_row else 10
-        return user.priority >= creator_priority
+        return user.priority > creator_priority
     finally:
         release_db_connection(conn)
 
