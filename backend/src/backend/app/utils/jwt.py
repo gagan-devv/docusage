@@ -4,7 +4,13 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
-JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "docusage-secure-jwt-secret-key-2026-production!"))
+DOCUSAGE_ENV = os.getenv("DOCUSAGE_ENV", "development").lower()
+JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY"))
+if not JWT_SECRET:
+    if DOCUSAGE_ENV == "production":
+        raise RuntimeError("JWT_SECRET or SECRET_KEY environment variable must be set in production mode!")
+    JWT_SECRET = "docusage-secure-jwt-secret-key-2026-production!"
+
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7

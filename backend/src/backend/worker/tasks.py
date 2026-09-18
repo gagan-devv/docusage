@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import Any
 from src.backend.worker.celery_app import celery_app
 from src.backend.app.utils.file_processing import read_document_pages
@@ -15,6 +16,12 @@ def ingest_contract_with_parents(contract_id: Any, file_path: str) -> int:
     - Stores parent documents (sections) in parent_documents table
     - Stores child chunks (clauses) in clauses table with parent references
     """
+    base_dir = os.path.abspath("data/contracts")
+    target_path = os.path.abspath(file_path)
+    if not (target_path == base_dir or target_path.startswith(base_dir + os.sep)):
+        logger.error(f"Ingestion rejected: file path {file_path} is outside allowed contracts directory.")
+        return 0
+
     try:
         pages = read_document_pages(file_path)
     except Exception as e:
@@ -119,3 +126,5 @@ def ingest_contract_with_parents(contract_id: Any, file_path: str) -> int:
 @celery_app.task
 def ingest_contract_task(contract_id: Any, file_path: str) -> int:
     return ingest_contract_with_parents(contract_id, file_path)
+
+ingest_contract = ingest_contract_with_parents

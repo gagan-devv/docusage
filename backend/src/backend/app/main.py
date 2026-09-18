@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,9 +28,11 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         try:
+            route = request.scope.get("route")
+            endpoint = route.path if route and hasattr(route, "path") else "unmatched"
             http_requests_total.labels(
                 method=request.method,
-                endpoint=request.url.path,
+                endpoint=endpoint,
                 status=str(response.status_code)
             ).inc()
         except Exception:
@@ -37,9 +40,16 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(PrometheusMetricsMiddleware)
+
+cors_origins_env = os.getenv("CORS_ORIGINS")
+cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] if cors_origins_env else [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -36,25 +36,24 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
     """
     Evaluates: Can user view or modify the contract?
     Rules:
-    1. Org Owner / Admin -> always True
-    2. Contract Creator -> always True
-    3. Explicit Grant override in contract_access_grants -> True
-    4. Seniority rule: User's priority >= Creator's priority -> True
-    5. Otherwise -> False
+    1. Validate UUID format; invalid -> False
+    2. Tenant boundary: user.org_id must match contract.org_id
+    3. Org Owner / Admin -> always True
+    4. Contract Creator -> always True
+    5. Explicit Grant override in contract_access_grants (respecting required_level) -> True
+    6. If required_level == 'admin' -> False (unless admin/creator/grant above)
+    7. Seniority rule: User's priority > Creator's priority -> True
+    8. Otherwise -> False
     """
-    if user.is_admin or user.role.lower() in ("partner", "admin", "owner"):
-        return True
-
     try:
         import uuid
         valid_uuid = str(uuid.UUID(str(contract_id)))
     except (ValueError, AttributeError):
-        return True
+        return False
 
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        # Fetch contract creator and org
         cursor.execute(
             "SELECT id, org_id, created_by_user_id, access_scope FROM contracts WHERE id = %s",
             (valid_uuid,)
@@ -66,12 +65,18 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
 
         contract_org_id, creator_id, access_scope = str(c_row[1]) if c_row[1] else None, str(c_row[2]) if c_row[2] else None, c_row[3]
 
-        # Check creator identity
-        if creator_id and creator_id == user.id:
+        # Multi-tenant isolation boundary: reject cross-organization access
+        if contract_org_id and user.org_id and str(contract_org_id) != str(user.org_id):
+            cursor.close()
+            return False
+
+        # Org admin / owner has full access within own organization
+        if user.is_admin or user.role.lower() in ("partner", "admin", "owner"):
             cursor.close()
             return True
 
-        if access_scope == "org_wide":
+        # Contract creator has full access (view and admin)
+        if creator_id and creator_id == user.id:
             cursor.close()
             return True
 
@@ -82,16 +87,27 @@ async def check_contract_access(user: CurrentUser, contract_id: str, required_le
             FROM contract_access_grants 
             WHERE contract_id = %s AND user_id = %s
             """,
-            (str(contract_id), user.id)
+            (valid_uuid, user.id)
         )
         grant = cursor.fetchone()
         if grant:
-            expires_at = grant[2]
+            permission_level, expires_at = grant[1], grant[2]
             if expires_at is None or expires_at > datetime.now(timezone.utc):
+                if required_level == "admin":
+                    cursor.close()
+                    return permission_level == "admin"
                 cursor.close()
                 return True
 
-        # If contract has no creator, visible to all in organization
+        # For administrative operations (modify, delete, delegate), only admin/creator/admin-grant allowed
+        if required_level == "admin":
+            cursor.close()
+            return False
+
+        if access_scope == "org_wide":
+            cursor.close()
+            return True
+
         if not creator_id:
             cursor.close()
             return True
@@ -249,19 +265,22 @@ async def list_org_roles(org_id: str) -> List[Dict[str, Any]]:
     finally:
         release_db_connection(conn)
 
-async def update_org_role(role_id: int, priority: int, description: Optional[str] = None) -> Dict[str, Any]:
+async def update_org_role(role_id: int, priority: int, description: Optional[str] = None, org_id: Optional[str] = None) -> Dict[str, Any]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        query = """
             UPDATE organization_roles 
             SET priority = %s, description = COALESCE(%s, description)
             WHERE id = %s
-            RETURNING id, org_id, role_name, priority, description, is_admin
-            """,
-            (priority, description, role_id)
-        )
+        """
+        params = [priority, description, role_id]
+        if org_id:
+            query += " AND org_id = %s"
+            params.append(str(org_id))
+        query += " RETURNING id, org_id, role_name, priority, description, is_admin"
+
+        cursor.execute(query, tuple(params))
         row = cursor.fetchone()
         conn.commit()
         cursor.close()

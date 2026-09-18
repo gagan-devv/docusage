@@ -12,14 +12,9 @@ from src.backend.app.services.rbac import (
     revoke_contract_access,
     list_contract_grants,
 )
-from src.backend.app.routes.auth import get_current_user
+from src.backend.app.routes.auth import get_current_user, require_admin, get_accessible_contract_id
 
 router = APIRouter()
-
-def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    if not user.is_admin and user.role.lower() not in ("partner", "admin", "owner"):
-        raise HTTPException(status_code=403, detail="Administrator or Owner access required")
-    return user
 
 class RoleUpdateRequest(BaseModel):
     priority: int = Field(ge=1, le=100)
@@ -42,7 +37,12 @@ async def get_roles(user: CurrentUser = Depends(get_current_user)):
 @router.put("/org/roles/{role_id}")
 async def edit_role_priority(role_id: int, payload: RoleUpdateRequest, admin: CurrentUser = Depends(require_admin)):
     try:
-        updated = await update_org_role(role_id, priority=payload.priority, description=payload.description)
+        updated = await update_org_role(
+            role_id,
+            priority=payload.priority,
+            description=payload.description,
+            org_id=admin.org_id
+        )
         return updated
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
@@ -70,7 +70,7 @@ async def edit_member(user_id: str, payload: MemberUpdateRequest, admin: Current
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/contracts/{contract_id}/grants")
-async def get_contract_grants(contract_id: str, user: CurrentUser = Depends(get_current_user)):
+async def get_contract_grants(contract_id: str = Depends(get_accessible_contract_id)):
     grants = await list_contract_grants(contract_id)
     return {"grants": grants}
 

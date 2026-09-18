@@ -43,15 +43,44 @@ SUPPORTED_PROVIDERS = [
     },
 ]
 
+import ipaddress
+from urllib.parse import urlparse
+
+def is_safe_ollama_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = (parsed.hostname or "").lower().strip()
+        if not hostname:
+            return False
+        if hostname in ("localhost", "host.docker.internal", "127.0.0.1", "::1"):
+            return True
+        if hostname in ("metadata.google.internal", "instance-data"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_link_local or ip.is_multicast or ip.is_reserved or str(ip) == "169.254.169.254":
+                return False
+            return True
+        except ValueError:
+            return True
+    except Exception:
+        return False
+
 def get_ollama_base_url() -> str:
     # ponytail: check env first, fallback to host.docker.internal if in container
     env_url = os.getenv("OLLAMA_BASE_URL")
-    if env_url:
+    if env_url and is_safe_ollama_url(env_url):
         return env_url
     return "http://localhost:11434"
 
 async def fetch_ollama_tags(base_url: Optional[str] = None) -> List[Dict[str, Any]]:
-    url = (base_url or get_ollama_base_url()).rstrip("/") + "/api/tags"
+    raw_base = (base_url or get_ollama_base_url()).strip()
+    if not is_safe_ollama_url(raw_base):
+        return []
+
+    url = raw_base.rstrip("/") + "/api/tags"
     urls_to_try = [url]
     if "localhost" in url:
         urls_to_try.append(url.replace("localhost", "host.docker.internal"))

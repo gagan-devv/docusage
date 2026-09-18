@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from src.backend.app.services.auth import request_email_otp, verify_email_otp, refresh_user_tokens
-from src.backend.app.services.rbac import CurrentUser
+from src.backend.app.services.rbac import CurrentUser, check_contract_access
 from src.backend.app.utils.jwt import decode_token
 
 router = APIRouter()
@@ -20,18 +20,9 @@ class RefreshRequest(BaseModel):
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> CurrentUser:
     if not authorization or not authorization.startswith("Bearer "):
-        # Dev fallback: If no auth header provided, authenticate as default admin
-        return CurrentUser(
-            id="00000000-0000-0000-0000-000000000001",
-            email="admin@docusage.ai",
-            name="Eleanor Vance",
-            org_id="11111111-1111-1111-1111-111111111111",
-            role="Partner",
-            priority=90,
-            is_admin=True,
-        )
+        raise HTTPException(status_code=401, detail="Authentication required")
 
-    token = authorization.split("Bearer ")[1].strip()
+    token = authorization.split("Bearer ", 1)[1].strip()
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
@@ -48,6 +39,21 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Curre
         priority=payload.get("priority", 40),
         is_admin=payload.get("is_admin", False),
     )
+
+def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if not user.is_admin and user.role.lower() not in ("partner", "admin", "owner"):
+        raise HTTPException(status_code=403, detail="Administrator or Owner access required")
+    return user
+
+async def get_accessible_contract_id(contract_id: str, user: CurrentUser = Depends(get_current_user)) -> str:
+    if not await check_contract_access(user, contract_id, required_level="view"):
+        raise HTTPException(status_code=403, detail="Forbidden: Insufficient seniority priority or access permissions")
+    return contract_id
+
+async def get_admin_contract_id(contract_id: str, user: CurrentUser = Depends(get_current_user)) -> str:
+    if not await check_contract_access(user, contract_id, required_level="admin"):
+        raise HTTPException(status_code=403, detail="Forbidden: Administrator or Owner access required for this contract")
+    return contract_id
 
 @router.post("/otp/request")
 async def send_otp(payload: OTPRequest):

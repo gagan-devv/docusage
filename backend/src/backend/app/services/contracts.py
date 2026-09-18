@@ -85,22 +85,29 @@ async def list_contracts(
     limit: int = 50,
     user_id: Optional[str] = None,
     is_admin: bool = False,
+    org_id: Optional[str] = None,
 ) -> list[ContractResponse]:
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         if not user_id or is_admin:
-            cursor.execute(
-                "SELECT id, name, file_path, metadata, created_at FROM contracts ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                (limit, skip)
-            )
+            if org_id:
+                cursor.execute(
+                    "SELECT id, name, file_path, metadata, created_at FROM contracts WHERE org_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (str(org_id), limit, skip)
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, name, file_path, metadata, created_at FROM contracts ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                    (limit, skip)
+                )
         else:
-            # Hierarchical Seniority + Explicit Grants RBAC Query
-            cursor.execute(
-                """
+            # Hierarchical Seniority + Explicit Grants RBAC Query with Tenant Scoping
+            org_filter = "c.org_id = %s AND " if org_id else ""
+            query = f"""
                 SELECT c.id, c.name, c.file_path, c.metadata, c.created_at 
                 FROM contracts c
-                WHERE (
+                WHERE {org_filter}(
                     c.created_by_user_id = %s
                     OR c.access_scope = 'org_wide'
                     OR c.created_by_user_id IS NULL
@@ -122,9 +129,10 @@ async def list_contracts(
                     ), 0)
                 )
                 ORDER BY c.created_at DESC LIMIT %s OFFSET %s
-                """,
-                (user_id, user_id, user_id, limit, skip)
-            )
+            """
+            params = [str(org_id)] if org_id else []
+            params.extend([user_id, user_id, user_id, limit, skip])
+            cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         cursor.close()
         return [

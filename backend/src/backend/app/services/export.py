@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from html import escape
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -193,15 +194,15 @@ async def generate_audit_pdf_bytes(contract_id: str, policy_id: Optional[int] = 
     summary_data = [
         [
             Paragraph("<b>Target Document:</b>", cell_style),
-            Paragraph(data['contract']['name'], cell_bold),
+            Paragraph(escape(str(data['contract']['name'])), cell_bold),
             Paragraph("<b>Policy Governed:</b>", cell_style),
-            Paragraph(data['policy']['name'], cell_bold),
+            Paragraph(escape(str(data['policy']['name'])), cell_bold),
         ],
         [
             Paragraph("<b>Contract ID:</b>", cell_style),
-            Paragraph(data['contract']['id'][:16] + "...", cell_style),
+            Paragraph(escape(str(data['contract']['id'][:16])) + "...", cell_style),
             Paragraph("<b>Risk Metric:</b>", cell_style),
-            Paragraph(f"{data['compliance_summary']['overall_risk_score'] * 100:.0f}% ({data['compliance_summary']['compliance_status']})", cell_bold),
+            Paragraph(f"{data['compliance_summary']['overall_risk_score'] * 100:.0f}% ({escape(str(data['compliance_summary']['compliance_status']))})", cell_bold),
         ],
     ]
 
@@ -239,14 +240,17 @@ async def generate_audit_pdf_bytes(contract_id: str, policy_id: Optional[int] = 
         cit_html = ""
         if f["citations"]:
             for c in f["citations"]:
-                cit_html += f"<br/><i>Quote ({c['section_reference']}):</i> \"{c['exact_quote'][:120]}\""
+                sec_ref = escape(str(c['section_reference']))
+                quote_text = escape(str(c['exact_quote'][:120]))
+                cit_html += f"<br/><i>Quote ({sec_ref}):</i> \"{quote_text}\""
 
-        redline_html = f"<br/><font color='#2563eb'><b>Suggested Redline:</b> {f['suggested_redline']}</font>" if f.get("suggested_redline") else ""
+        redline_html = f"<br/><font color='#2563eb'><b>Suggested Redline:</b> {escape(str(f['suggested_redline']))}</font>" if f.get("suggested_redline") else ""
+        escaped_rationale = escape(str(f['rationale']))
 
-        rationale_p = Paragraph(f"{f['rationale']}{cit_html}{redline_html}", cell_style)
+        rationale_p = Paragraph(f"{escaped_rationale}{cit_html}{redline_html}", cell_style)
 
         table_data.append([
-            Paragraph(f["rule_name"], cell_bold),
+            Paragraph(escape(str(f["rule_name"])), cell_bold),
             Paragraph(status_text, cell_style),
             Paragraph(f"{f['confidence_score']*100:.0f}%", cell_style),
             rationale_p

@@ -119,15 +119,19 @@ async def request_email_otp(email: str, purpose: str = "login") -> Dict[str, Any
         # Deliver OTP via Resend email service
         delivery_res = send_otp_email(email, otp_code, purpose)
 
-        logger.info(f"[AUTH OTP] Email: {email} | Verification Code: {otp_code} | Delivery: {delivery_res.get('status')}")
+        logger.info(f"[AUTH OTP] Email: {email} | Verification Code: [REDACTED] | Delivery: {delivery_res.get('status')}")
+
+        allow_dev_otp = (
+            os.getenv("DOCUSAGE_ENV", "dev").lower() != "production"
+            and (os.getenv("ENABLE_DEV_OTP", "false").lower() in ("true", "1", "yes") or "PYTEST_CURRENT_TEST" in os.environ)
+        )
 
         return {
             "email": email,
             "message": "Verification OTP sent successfully to your email.",
             "delivery": delivery_res.get("status"),
             "expires_in_seconds": OTP_EXPIRE_MINUTES * 60,
-            # Dev fallback if Resend API key is not set
-            "dev_otp": otp_code if (os.getenv("DOCUSAGE_ENV", "dev") != "production" or not settings.resend_api_key) else None
+            "dev_otp": otp_code if allow_dev_otp else None
         }
     finally:
         release_db_connection(conn)

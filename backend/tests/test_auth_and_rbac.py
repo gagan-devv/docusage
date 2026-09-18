@@ -59,6 +59,54 @@ def test_secret_hashing_and_verification():
     assert verify_secret(secret, hashed) is True
     assert verify_secret("000000", hashed) is False
 
+def is_db_connected() -> bool:
+    try:
+        from src.backend.app.utils.db import get_db_connection, release_db_connection
+        conn = get_db_connection()
+        release_db_connection(conn)
+        return True
+    except Exception:
+        return False
+
+def test_unauthenticated_rejection_in_get_current_user():
+    from fastapi import HTTPException
+    from src.backend.app.routes.auth import get_current_user, require_admin
+    from src.backend.app.services.rbac import CurrentUser
+    import asyncio
+
+    # None or missing header raises 401
+    with pytest.raises(HTTPException) as exc1:
+        asyncio.run(get_current_user(None))
+    assert exc1.value.status_code == 401
+
+    # Invalid token raises 401
+    with pytest.raises(HTTPException) as exc2:
+        asyncio.run(get_current_user("Bearer invalid.jwt.token"))
+    assert exc2.value.status_code == 401
+
+    # Non-admin user rejected by require_admin
+    user = CurrentUser(
+        id="00000000-0000-0000-0000-000000000002",
+        email="associate@docusage.ai",
+        org_id="11111111-1111-1111-1111-111111111111",
+        role="Associate",
+        priority=30,
+        is_admin=False
+    )
+    with pytest.raises(HTTPException) as exc3:
+        require_admin(user)
+    assert exc3.value.status_code == 403
+
+def test_production_secret_enforcement(monkeypatch):
+    import src.backend.app.utils.security as sec_mod
+    monkeypatch.setenv("DOCUSAGE_ENV", "production")
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setattr(sec_mod, "_FERNET_INSTANCE", None)
+
+    with pytest.raises(RuntimeError, match="SECRET_KEY environment variable must be set in production mode"):
+        sec_mod.get_fernet_cipher()
+
+@pytest.mark.skipif(not is_db_connected(), reason="PostgreSQL database service not reachable")
 @pytest.mark.anyio
 async def test_email_otp_request_and_verification_lifecycle():
     email = "lawyer_test@docusage.ai"

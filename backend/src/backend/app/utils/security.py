@@ -10,7 +10,12 @@ _FERNET_INSTANCE: Optional[Fernet] = None
 def get_fernet_cipher() -> Fernet:
     global _FERNET_INSTANCE
     if _FERNET_INSTANCE is None:
-        secret = os.getenv("SECRET_KEY", "docusage-master-encryption-key-32bytes-secret!")
+        docusage_env = os.getenv("DOCUSAGE_ENV", "development").lower()
+        secret = os.getenv("SECRET_KEY")
+        if not secret:
+            if docusage_env == "production":
+                raise RuntimeError("SECRET_KEY environment variable must be set in production mode!")
+            secret = "docusage-master-encryption-key-32bytes-secret!"
         key_32 = secret.encode("utf-8")[:32].ljust(32, b"0")
         url_safe_key = base64.urlsafe_b64encode(key_32)
         _FERNET_INSTANCE = Fernet(url_safe_key)

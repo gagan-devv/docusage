@@ -49,6 +49,17 @@ def test_metrics_middleware_increments_http_requests():
     assert 'endpoint="/health"' in body
 
 
+def test_prometheus_metric_cardinality_normalized():
+    """Verify that arbitrary dynamic/404 URL paths are normalized to prevent cardinality DoS."""
+    client.get("/nonexistent-endpoint-uuid-12345")
+    client.get("/nonexistent-endpoint-uuid-67890")
+
+    metrics_text = get_metrics_content().decode("utf-8")
+    assert 'endpoint="unmatched"' in metrics_text
+    assert 'endpoint="/nonexistent-endpoint-uuid-12345"' not in metrics_text
+    assert 'endpoint="/nonexistent-endpoint-uuid-67890"' not in metrics_text
+
+
 def test_metric_objects_safe_counter_and_histogram():
     """Verify counters and histograms can be incremented and observed safely."""
     # Test safe increment without explicit labels
