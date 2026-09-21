@@ -362,6 +362,20 @@ cd frontend && npm run build
 
 ---
 
+## Documentation & Changelog Maintenance Protocol 📝
+
+To maintain strict synchronization between application code and documentation, the following protocols must be followed on **every change or commit**:
+
+1. **`CHANGELOG.md` Mandatory Update**:
+   - Every commit must add an entry under `CHANGELOG.md` noting the exact date and time (with timezone offset, e.g. `2026-09-22 00:38:00 UTC+05:30`).
+   - Changes must be categorized into standard sections: `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, or `### Security`.
+2. **`README.md` & `ARCHITECTURE.md` Synchronization**:
+   - Any new pages, routes, endpoints, design tokens, or architectural decisions must be immediately documented in `README.md` and `ARCHITECTURE.md`.
+   - Never allow code to drift ahead of architectural documentation.
+
+---
+
 ## License
 
 Distributed under the MIT License. See `LICENSE` for details.
+

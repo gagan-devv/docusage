@@ -161,22 +161,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#121214] border border-[#27272a] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden text-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-surface border border-border w-full max-w-xl rounded-xl shadow-2xl overflow-hidden text-xs">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#27272a] bg-[#18181b]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-surface-raised/40">
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
+            <div className="p-1.5 rounded bg-primary/10 text-primary border border-primary/20">
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-zinc-100">AI Model & Provider Configuration</h3>
-              <p className="text-[11px] text-zinc-400">Configure Cloud LLM providers, local Ollama models, and encrypted vault credentials</p>
+              <h3 className="text-sm font-semibold text-foreground">AI Model & Provider Configuration</h3>
+              <p className="text-[11px] text-foreground-muted">Configure Cloud LLM providers, local Ollama models, and encrypted vault credentials</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1 rounded text-foreground-muted hover:text-foreground hover:bg-surface-raised transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -188,14 +188,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <div
               className={`p-3 rounded-md flex items-center space-x-2 text-xs ${
                 statusMsg.type === "success"
-                  ? "bg-emerald-950/40 border border-emerald-800/60 text-emerald-300"
-                  : "bg-red-950/40 border border-red-800/60 text-red-300"
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                  : "bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400"
               }`}
             >
               {statusMsg.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-500" />
               ) : (
-                <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-500" />
               )}
               <span>{statusMsg.text}</span>
             </div>
@@ -203,11 +203,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
           {/* Provider Selection */}
           <div className="space-y-1.5">
-            <label className="block text-zinc-300 font-medium">Select Model Provider</label>
+            <label className="block text-foreground-muted font-medium">Select Model Provider</label>
             <select
               value={selectedProviderId}
               onChange={(e) => setSelectedProviderId(e.target.value)}
-              className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-500 font-sans"
+              className="w-full bg-surface-raised border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-primary/50 font-sans"
             >
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -220,11 +220,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           {/* LLM Model Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-medium">LLM Audit Model</label>
+              <label className="block text-foreground-muted font-medium">LLM Audit Model</label>
               <select
                 value={selectedLlm}
                 onChange={(e) => setSelectedLlm(e.target.value)}
-                className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-500 font-mono"
+                className="w-full bg-surface-raised border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-primary/50 font-mono"
               >
                 {selectedProviderId === "ollama" && ollamaModels.length > 0
                   ? ollamaModels.map((m) => (
@@ -242,11 +242,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
             {/* Embedding Model Selection */}
             <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-medium">Vector Embedding Model</label>
+              <label className="block text-foreground-muted font-medium">Vector Embedding Model</label>
               <select
                 value={selectedEmbedding}
                 onChange={(e) => setSelectedEmbedding(e.target.value)}
-                className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-500 font-mono"
+                className="w-full bg-surface-raised border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-primary/50 font-mono"
               >
                 {selectedProviderId === "ollama" && ollamaModels.length > 0
                   ? ollamaModels.map((m) => (
@@ -265,15 +265,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
           {/* Ollama Connection Section */}
           {selectedProviderId === "ollama" && (
-            <div className="p-3.5 border border-[#27272a] rounded-lg bg-[#151518] space-y-2.5">
+            <div className="p-3.5 border border-border rounded-lg bg-surface-raised/50 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <span className="font-medium text-zinc-200">Ollama Local Instance</span>
+                  <span className="font-medium text-foreground">Ollama Local Instance</span>
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono ${
                       ollamaConnected
-                        ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
-                        : "bg-amber-950 text-amber-400 border border-amber-800"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
                     }`}
                   >
                     {ollamaConnected ? "● Online" : "○ Disconnected"}
@@ -283,7 +283,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <button
                   onClick={() => loadOllamaTags(ollamaUrl)}
                   disabled={isOllamaLoading}
-                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] transition-colors"
+                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-surface border border-border hover:bg-surface-raised text-foreground text-[11px] transition-colors"
                 >
                   <RefreshCw className={`w-3 h-3 ${isOllamaLoading ? "animate-spin" : ""}`} />
                   <span>Refresh Models</span>
@@ -296,34 +296,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   value={ollamaUrl}
                   onChange={(e) => setOllamaUrl(e.target.value)}
                   placeholder="http://localhost:11434"
-                  className="flex-1 bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1.5 text-zinc-200 font-mono text-[11px] focus:outline-none focus:border-zinc-500"
+                  className="flex-1 bg-surface border border-border rounded px-2.5 py-1.5 text-foreground font-mono text-[11px] focus:outline-none focus:border-primary/50"
                 />
               </div>
-              <p className="text-[10px] text-zinc-500">
-                Discovers local models pulled via <code className="text-zinc-400">ollama pull llama3.2</code> or <code className="text-zinc-400">nomic-embed-text</code>.
+              <p className="text-[10px] text-foreground-muted">
+                Discovers local models pulled via <code className="text-foreground">ollama pull llama3.2</code> or <code className="text-foreground">nomic-embed-text</code>.
               </p>
             </div>
           )}
 
-          {/* API Key Vault Input (for OpenAI, Anthropic, Gemini) */}
+          {/* API Key Vault Input */}
           {currentProvider?.requires_api_key && (
-            <div className="space-y-2 p-3.5 border border-[#27272a] rounded-lg bg-[#151518]">
+            <div className="space-y-2 p-3.5 border border-border rounded-lg bg-surface-raised/50">
               <div className="flex items-center justify-between">
-                <label className="text-zinc-200 font-medium flex items-center space-x-1.5">
-                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                <label className="text-foreground font-medium flex items-center space-x-1.5">
+                  <Key className="w-3.5 h-3.5 text-primary" />
                   <span>{currentProvider.name} API Key</span>
                 </label>
-                <div className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 font-mono">
+                <div className="inline-flex items-center space-x-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
                   <ShieldCheck className="w-3 h-3" />
                   <span>AES-256 Encrypted Vault</span>
                 </div>
               </div>
 
               {activeSetting?.has_api_key && (
-                <div className="text-[11px] text-zinc-400 font-mono flex items-center space-x-2 bg-[#18181b] p-2 rounded border border-[#27272a]">
-                  <span className="text-zinc-500">Stored Key:</span>
-                  <span className="text-zinc-200">{activeSetting.api_key_masked}</span>
-                  <span className="text-emerald-400 text-[10px] ml-auto">✓ Active</span>
+                <div className="text-[11px] text-foreground-muted font-mono flex items-center space-x-2 bg-surface p-2 rounded border border-border">
+                  <span className="text-foreground-muted">Stored Key:</span>
+                  <span className="text-foreground">{activeSetting.api_key_masked}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 text-[10px] ml-auto">✓ Active</span>
                 </div>
               )}
 
@@ -333,12 +333,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder={activeSetting?.has_api_key ? "Enter new API key to update stored secret..." : "Paste API Key (sk-...)"}
-                  className="w-full bg-[#18181b] border border-[#27272a] rounded-lg pl-3 pr-9 py-2 text-zinc-100 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
+                  className="w-full bg-surface border border-border rounded-lg pl-3 pr-9 py-2 text-foreground font-mono placeholder:text-foreground-muted/50 focus:outline-none focus:border-primary/50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
                 >
                   {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -348,21 +348,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-[#27272a] bg-[#18181b]">
-          <span className="text-[11px] text-zinc-500">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-surface-raised/30">
+          <span className="text-[11px] text-foreground-muted">
             {activeSetting?.provider ? `Active: ${activeSetting.provider.toUpperCase()} (${activeSetting.selected_llm})` : "Default: LOCAL"}
           </span>
           <div className="flex items-center space-x-2">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="px-3 py-1.5 rounded text-foreground-muted hover:text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 py-1.5 rounded bg-zinc-100 hover:bg-white text-zinc-950 font-medium transition-colors shadow-sm disabled:opacity-50"
+              className="px-4 py-1.5 rounded bg-foreground text-canvas font-medium transition-colors shadow-sm disabled:opacity-50 hover:opacity-90"
             >
               {isSaving ? "Encrypting & Saving..." : "Save & Apply Settings"}
             </button>

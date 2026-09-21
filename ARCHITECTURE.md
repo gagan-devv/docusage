@@ -508,3 +508,20 @@ The FastAPI application exposes standard Prometheus exposition format telemetry:
 Docusage autonomously generates legal compliance certificates summarizing target agreement metadata, governed policy covenants, overall risk scores, and granular findings with exact quotes and section references:
 - **Structured JSON (`GET /contracts/{id}/export?format=json`)**: Machine-readable JSON compliance envelope.
 - **ReportLab PDF (`GET /contracts/{id}/export?format=pdf`)**: Formatted document template with summary tables, deviation warning palettes, verbatim quotes, suggested redlines, and formal legal counsel arbitration sign-off blocks.
+
+---
+
+## 10. Frontend Architecture, Multi-Device Design & Documentation Protocol 📱
+
+### 10.1 Multi-Device Responsive Design System
+The frontend implements a multi-device responsive design system targeting mobile (< 768px), tablet (768px–1024px), and desktop/wide displays:
+- **Design Tokens**: Defined via CSS custom properties on `:root` (bright/light default) and `html.dark` (Titanium & Zinc dark mode).
+- **Navigation**: Persistent desktop navbar transforms into a sliding touch-friendly navigation drawer on mobile with backdrop dismiss.
+- **Legal Reviewer Workspace**: Side-by-side split screen on desktop adapts to a clean 2-segment tab switcher (`Clauses` $\leftrightarrow$ `Findings`) on mobile and tablet devices.
+- **Decision Dock**: Bottom-docked floating bar on desktop; thumb-reachable fixed bottom sheet on mobile devices.
+
+### 10.2 Mandatory Documentation & Changelog Maintenance Protocol
+All developers and agent workflows modifying this repository must adhere to the following maintenance protocol:
+1. **`CHANGELOG.md` Updates**: Any commit must append an entry with the exact date and time (including timezone offset) categorizing changes under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, or `Security`.
+2. **`README.md` & `ARCHITECTURE.md` Synchronization**: Architectural updates, new routes, and feature enhancements must be updated synchronously to prevent documentation drift.
+

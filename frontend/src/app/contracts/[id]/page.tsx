@@ -8,9 +8,11 @@ import { PolicyInspector } from "@/components/reviewer/PolicyInspector";
 import { DecisionDock } from "@/components/reviewer/DecisionDock";
 import { api } from "@/lib/api";
 import { Contract, Policy, GraphState, ContractClause, ClauseHighlight } from "@/types";
-import { ArrowLeft, UserPlus, ShieldCheck, Download, FileText } from "lucide-react";
+import { ArrowLeft, UserPlus, ShieldCheck, Download, FileText, FileCode } from "lucide-react";
 import Link from "next/link";
 import { AccessGrantModal } from "@/components/contracts/AccessGrantModal";
+
+type ReviewerViewTab = "document" | "inspector";
 
 export default function ContractReviewPage() {
   const params = useParams();
@@ -30,6 +32,7 @@ export default function ContractReviewPage() {
   const [activeCitationQuote, setActiveCitationQuote] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<ReviewerViewTab>("document");
 
   const handleExportPdf = async () => {
     try {
@@ -170,7 +173,6 @@ export default function ContractReviewPage() {
         setNotice({ msg: "Contract rejected by legal counsel.", type: "error" });
       }
     } catch (err: any) {
-      // Optimistic state update in offline testing
       setGraphState((prev) => {
         if (!prev) return null;
         const nextStatus =
@@ -198,7 +200,6 @@ export default function ContractReviewPage() {
     }
   };
 
-  // Convert CRAG findings or deviations into dynamic highlights for the document viewer
   const highlightedClauses: ClauseHighlight[] = (graphState?.crag_findings || []).map((finding, idx) => {
     const primaryCitation = finding.citations?.[0];
     return {
@@ -220,48 +221,48 @@ export default function ContractReviewPage() {
 
   if (!contract) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-xs font-mono text-zinc-400">
+      <div className="min-h-screen flex items-center justify-center bg-canvas text-xs font-mono text-foreground-secondary">
         Loading agreement...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#09090b]">
+    <div className="min-h-screen flex flex-col bg-canvas text-foreground transition-colors duration-150">
       <Navbar />
 
-      {/* Reviewer Header Breadcrumb */}
-      <div className="h-11 border-b border-[#27272a] bg-[#121214] px-6 flex items-center justify-between text-xs">
-        <div className="flex items-center space-x-3">
+      {/* Reviewer Header Breadcrumb & Actions Bar */}
+      <div className="min-h-[48px] border-b border-border bg-surface px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <Link
             href="/contracts"
-            className="flex items-center space-x-1 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center space-x-1 text-foreground-secondary hover:text-foreground transition-colors font-medium shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Contracts</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Contracts</span>
           </Link>
-          <span className="text-zinc-600">/</span>
-          <span className="text-zinc-200 font-medium truncate max-w-xs">{contract.name}</span>
+          <span className="text-foreground-muted">/</span>
+          <span className="text-foreground font-semibold truncate max-w-[180px] sm:max-w-xs">{contract.name}</span>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Policy Selector Dropdown */}
-          <div className="flex items-center space-x-1.5 bg-zinc-900 border border-zinc-700/80 rounded px-2.5 py-1 text-xs font-mono shadow-sm">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-zinc-400 text-[10px] uppercase tracking-wider">Policy:</span>
+          <div className="flex items-center space-x-1.5 bg-surface-secondary border border-border rounded-lg px-2.5 py-1 text-xs font-mono shadow-xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className="text-foreground-secondary text-[10px] uppercase tracking-wider hidden sm:inline">Policy:</span>
             <select
               value={selectedPolicyId}
               onChange={(e) => setSelectedPolicyId(Number(e.target.value))}
-              className="bg-transparent text-zinc-100 text-xs font-mono focus:outline-none cursor-pointer pr-1"
+              className="bg-transparent text-foreground text-xs font-sans focus:outline-none cursor-pointer pr-1"
             >
               {policies.length > 0 ? (
                 policies.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#18181b] text-zinc-200">
+                  <option key={p.id} value={p.id} className="bg-surface text-foreground">
                     {p.name}
                   </option>
                 ))
               ) : (
-                <option value={1} className="bg-[#18181b] text-zinc-200">
+                <option value={1} className="bg-surface text-foreground">
                   Standard Enterprise Policy
                 </option>
               )}
@@ -269,74 +270,111 @@ export default function ContractReviewPage() {
           </div>
 
           <button
+            type="button"
             onClick={() => setIsGrantModalOpen(true)}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
-            title="Delegate access to juniors or colleagues"
+            className="flex items-center space-x-1 px-2.5 py-1 min-h-[30px] rounded-lg bg-surface-secondary hover:bg-surface-tertiary text-foreground border border-border transition-colors text-xs"
+            title="Delegate access"
           >
-            <UserPlus className="w-3.5 h-3.5 text-amber-400" />
-            <span>Delegate Access</span>
+            <UserPlus className="w-3.5 h-3.5 text-amber-500" />
+            <span className="hidden sm:inline">Delegate</span>
           </button>
 
           <button
+            type="button"
             onClick={handleExportPdf}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-200 border border-emerald-700/60 transition-colors font-mono text-[11px]"
-            title="Download PDF Compliance Certificate with CRAG Citations"
+            className="flex items-center space-x-1 px-2.5 py-1 min-h-[30px] rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-colors font-mono text-[11px]"
+            title="Download PDF Compliance Certificate"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Export PDF</span>
+            <Download className="w-3.5 h-3.5 text-emerald-500" />
+            <span>PDF</span>
           </button>
 
           <button
+            type="button"
             onClick={handleExportJson}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors font-mono text-[11px]"
-            title="Download JSON Audit Findings Payload"
+            className="flex items-center space-x-1 px-2.5 py-1 min-h-[30px] rounded-lg bg-surface-secondary hover:bg-surface-tertiary text-foreground border border-border transition-colors font-mono text-[11px]"
+            title="Download JSON Audit Findings"
           >
-            <FileText className="w-3.5 h-3.5 text-amber-400" />
+            <FileCode className="w-3.5 h-3.5 text-amber-500" />
             <span>JSON</span>
           </button>
-
-          <div className="w-px h-3.5 bg-zinc-800 hidden sm:block" />
-          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-            Interactive CRAG Mode
-          </span>
         </div>
       </div>
 
       {/* Notice Banner */}
       {notice && (
         <div
-          className={`px-6 py-2 border-b text-xs flex items-center justify-between ${
+          className={`px-4 sm:px-6 py-2 border-b text-xs flex items-center justify-between ${
             notice.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
               : notice.type === "error"
-              ? "bg-red-500/10 border-red-500/20 text-red-300"
-              : "bg-amber-500/10 border-amber-500/20 text-amber-300"
+              ? "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-300"
+              : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300"
           }`}
         >
           <span className="font-mono">{notice.msg}</span>
-          <button onClick={() => setNotice(null)} className="text-zinc-400 hover:text-zinc-200 text-xs">
+          <button type="button" onClick={() => setNotice(null)} className="text-foreground-secondary hover:text-foreground text-xs ml-2">
             ✕
           </button>
         </div>
       )}
 
-      {/* Split-Screen Main View */}
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 gap-4 max-w-7xl w-full mx-auto">
-        <DocumentViewer
-          contract={contract}
-          clauses={clauses}
-          highlightedClauses={highlightedClauses}
-          selectedClauseId={selectedClauseId}
-          activeCitationQuote={activeCitationQuote}
-          onSelectClause={(id) => setSelectedClauseId(id)}
-          onSelectCitation={(quote) => setActiveCitationQuote(quote)}
-        />
-        <PolicyInspector
-          policy={policy}
-          graphState={graphState}
-          isLoading={isSubmitting}
-          onSelectCitation={(quote) => setActiveCitationQuote(quote)}
-        />
+      {/* Mobile / Tablet Segmented Tab Control (< 1024px) */}
+      <div className="lg:hidden px-4 pt-3 pb-1 bg-canvas border-b border-border">
+        <div className="flex items-center p-1 bg-surface-secondary border border-border rounded-xl text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setMobileTab("document")}
+            className={`flex-1 py-1.5 min-h-[32px] rounded-lg transition-colors text-center ${
+              mobileTab === "document"
+                ? "bg-surface text-foreground shadow-xs font-semibold"
+                : "text-foreground-secondary hover:text-foreground"
+            }`}
+          >
+            📄 Document Clauses ({clauses.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("inspector")}
+            className={`flex-1 py-1.5 min-h-[32px] rounded-lg transition-colors text-center ${
+              mobileTab === "inspector"
+                ? "bg-surface text-foreground shadow-xs font-semibold"
+                : "text-foreground-secondary hover:text-foreground"
+            }`}
+          >
+            🛡️ CRAG Inspector ({highlightedClauses.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Main Workspace (Side-by-side on lg+, Tabbed on smaller screens) */}
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-3 sm:p-4 gap-4 max-w-7xl w-full mx-auto">
+        <div className={`flex-1 ${mobileTab === "document" ? "block" : "hidden lg:flex lg:flex-1"}`}>
+          <DocumentViewer
+            contract={contract}
+            clauses={clauses}
+            highlightedClauses={highlightedClauses}
+            selectedClauseId={selectedClauseId}
+            activeCitationQuote={activeCitationQuote}
+            onSelectClause={(id) => setSelectedClauseId(id)}
+            onSelectCitation={(quote) => {
+              setActiveCitationQuote(quote);
+              setMobileTab("document");
+            }}
+          />
+        </div>
+
+        <div className={`w-full lg:w-96 ${mobileTab === "inspector" ? "block" : "hidden lg:block"}`}>
+          <PolicyInspector
+            policy={policy}
+            graphState={graphState}
+            isLoading={isSubmitting}
+            onSelectCitation={(quote) => {
+              setActiveCitationQuote(quote);
+              setMobileTab("document");
+            }}
+          />
+        </div>
       </main>
 
       {/* Floating Human-in-the-loop Decision Dock */}

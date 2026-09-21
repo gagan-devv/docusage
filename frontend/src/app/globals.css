@@ -4,31 +4,72 @@
 
 @layer base {
   :root {
-    --background: #09090b;
-    --foreground: #f4f4f5;
+    --canvas: #f8fafc;
+    --surface: #ffffff;
+    --surface-secondary: #f1f5f9;
+    --surface-tertiary: #e2e8f0;
+    --surface-hover: #f8fafc;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --border-highlight: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --card: #ffffff;
+    --card-hover: #f8fafc;
+    color-scheme: light;
+  }
+
+  .dark {
+    --canvas: #09090b;
+    --surface: #121214;
+    --surface-secondary: #151518;
+    --surface-tertiary: #1a1a1e;
+    --surface-hover: #1e1e22;
+    --border: #27272a;
+    --border-subtle: #1e1e22;
+    --border-highlight: #3f3f46;
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --card: #18181b;
+    --card-hover: #202024;
+    color-scheme: dark;
   }
 }
 
 body {
-  background-color: #09090b;
-  color: #f4f4f5;
+  background-color: var(--canvas);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* Minimalist Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Modern standard scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-highlight) transparent;
 }
 
-::-webkit-scrollbar-track {
-  background: #121214;
+/* Legacy fallback for WebKit */
+@supports not (scrollbar-width: thin) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--surface);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-highlight);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+/* Mobile safe area padding utility */
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
 }

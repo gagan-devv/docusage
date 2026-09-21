@@ -48,7 +48,6 @@ export default function EvalsPage() {
         const contracts = await api.listContracts(0, 20);
         if (contracts && contracts.length > 0) {
           const formatted: ContractOption[] = contracts.map((c: Contract) => {
-            // Generate clean 3-4 word context from filename or metadata
             let context = "Standard Legal Agreement";
             const lower = c.name.toLowerCase();
             if (lower.includes("nda") || lower.includes("disclosure")) {
@@ -87,7 +86,6 @@ export default function EvalsPage() {
       if (data && data.length > 0) {
         setEvals(data);
       } else {
-        // Fallback sample evaluations for the selected contract context
         setEvals([
           {
             id: 101,
@@ -148,19 +146,19 @@ export default function EvalsPage() {
   }, [selectedContract]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#09090b]">
+    <div className="min-h-screen flex flex-col bg-canvas text-foreground transition-colors duration-150">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#27272a]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-border">
           <div>
-            <h1 className="text-lg font-semibold text-zinc-100 flex items-center space-x-2">
-              <BarChart3 className="w-5 h-5 text-zinc-400" />
+            <h1 className="text-lg font-semibold text-foreground flex items-center space-x-2">
+              <BarChart3 className="w-5 h-5 text-foreground-secondary" />
               <span>Audit Evaluations & Observability</span>
             </h1>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Historical evaluation metrics logged in PostgreSQL and tracked via MLflow and Prometheus
+            <p className="text-xs text-foreground-secondary mt-0.5">
+              Historical evaluation metrics, compliance rates, and system telemetry
             </p>
           </div>
 
@@ -168,18 +166,18 @@ export default function EvalsPage() {
             href="http://localhost:8000/metrics"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition-colors"
+            className="inline-flex items-center space-x-2 px-3.5 py-2 min-h-[38px] rounded-lg bg-surface-secondary hover:bg-surface-tertiary text-foreground border border-border text-xs font-medium transition-colors shadow-xs self-start sm:self-auto"
           >
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Prometheus /metrics</span>
-            <ExternalLink className="w-3 h-3 text-zinc-400" />
+            <ExternalLink className="w-3.5 h-3.5 text-foreground-secondary" />
           </a>
         </div>
 
-        {/* Contract Selector with Name and 3-4 Word Context */}
+        {/* Contract Selector */}
         <div className="space-y-2">
           <div className="flex items-center space-x-2 text-xs">
-            <span className="text-zinc-400 font-medium">Select Contract / Scope:</span>
+            <span className="text-foreground-secondary font-medium">Select Contract Scope:</span>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -188,20 +186,21 @@ export default function EvalsPage() {
               return (
                 <button
                   key={String(contract.id)}
+                  type="button"
                   onClick={() => setSelectedContract(contract)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs transition-all border ${
+                  className={`flex items-center space-x-2 px-3.5 py-2 min-h-[38px] rounded-xl text-xs transition-all border ${
                     isSelected
-                      ? "bg-zinc-100 text-zinc-950 border-white font-medium shadow-sm"
-                      : "bg-[#18181b] text-zinc-300 border-[#27272a] hover:bg-[#202024] hover:text-white"
+                      ? "bg-foreground text-canvas font-semibold shadow-xs"
+                      : "bg-surface text-foreground border-border hover:bg-surface-secondary"
                   }`}
                 >
-                  <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-zinc-900" : "text-zinc-500"}`} />
-                  <span className="font-medium truncate max-w-[200px]">{contract.name}</span>
+                  <FileText className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-canvas" : "text-foreground-secondary"}`} />
+                  <span className="font-medium truncate max-w-[180px] sm:max-w-[220px]">{contract.name}</span>
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-sans ${
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
                       isSelected
-                        ? "bg-zinc-200 text-zinc-800"
-                        : "bg-zinc-800/80 text-zinc-400 border border-zinc-700/50"
+                        ? "bg-canvas/20 text-canvas"
+                        : "bg-surface-secondary text-foreground-secondary border border-border"
                     }`}
                   >
                     {contract.context}
@@ -213,54 +212,56 @@ export default function EvalsPage() {
         </div>
 
         {/* Evaluations Table */}
-        <div className="border border-[#27272a] rounded-lg bg-[#121214] overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-[#27272a] flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#151518]">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-zinc-400" />
-              <div>
-                <h3 className="text-xs font-semibold text-zinc-100">
+        <div className="border border-border rounded-xl bg-surface overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-surface-secondary">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <FileText className="w-4 h-4 text-foreground-secondary shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-xs font-semibold text-foreground truncate">
                   Evaluation Log for {selectedContract.name}
                 </h3>
-                <p className="text-[11px] text-zinc-400 font-mono">
-                  Context: {selectedContract.context} • {selectedContract.file_path}
+                <p className="text-[11px] text-foreground-secondary font-mono truncate">
+                  Context: {selectedContract.context}
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-mono text-zinc-500">
-              Table: evals (PostgreSQL)
+            <span className="text-[10px] font-mono text-foreground-secondary">
+              {evals.length} Metrics Logged
             </span>
           </div>
 
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-[#27272a] bg-[#101012] text-zinc-400 font-mono text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-4">Evaluation ID</th>
-                <th className="py-3 px-4">Metric Name</th>
-                <th className="py-3 px-4">Value</th>
-                <th className="py-3 px-4 text-right">Timestamp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#27272a]">
-              {evals.map((e) => (
-                <tr key={e.id} className="hover:bg-[#18181b] transition-colors">
-                  <td className="py-3 px-4 font-mono text-[11px] text-zinc-500">
-                    #{e.id}
-                  </td>
-                  <td className="py-3 px-4 font-medium text-zinc-200">
-                    <span className="font-mono">{e.metric_name}</span>
-                  </td>
-                  <td className="py-3 px-4 font-mono font-semibold text-zinc-100">
-                    {e.metric_name.includes("score") || e.metric_name.includes("rate")
-                      ? `${(e.value * (e.value <= 1 ? 100 : 1)).toFixed(1)}%`
-                      : e.value}
-                  </td>
-                  <td className="py-3 px-4 text-right text-zinc-400 font-mono text-[11px]">
-                    {formatDate(e.timestamp)}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-surface text-foreground-secondary font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Evaluation ID</th>
+                  <th className="py-3 px-4">Metric Name</th>
+                  <th className="py-3 px-4">Value</th>
+                  <th className="py-3 px-4 text-right">Timestamp</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {evals.map((e) => (
+                  <tr key={e.id} className="hover:bg-surface-hover transition-colors">
+                    <td className="py-3 px-4 font-mono text-[11px] text-foreground-muted">
+                      #{e.id}
+                    </td>
+                    <td className="py-3 px-4 font-medium text-foreground">
+                      <span className="font-mono">{e.metric_name}</span>
+                    </td>
+                    <td className="py-3 px-4 font-mono font-semibold text-foreground">
+                      {e.metric_name.includes("score") || e.metric_name.includes("rate")
+                        ? `${(e.value * (e.value <= 1 ? 100 : 1)).toFixed(1)}%`
+                        : e.value}
+                    </td>
+                    <td className="py-3 px-4 text-right text-foreground-secondary font-mono text-[11px]">
+                      {formatDate(e.timestamp)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
     </div>

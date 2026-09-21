@@ -56,177 +56,197 @@ export default function AdminRolesPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#09090b]">
+    <div className="min-h-screen flex flex-col bg-canvas text-foreground transition-colors duration-150">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#27272a]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-border">
           <div>
-            <h1 className="text-lg font-semibold text-zinc-100 flex items-center space-x-2">
-              <ShieldAlert className="w-5 h-5 text-amber-400" />
+            <h1 className="text-lg font-semibold text-foreground flex items-center space-x-2">
+              <ShieldAlert className="w-5 h-5 text-amber-500" />
               <span>Organization Roles & Seniority RBAC</span>
             </h1>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Configure employee roles and numerical priority rankings. Seniors automatically see documents created by juniors; juniors are blocked until explicitly granted.
+            <p className="text-xs text-foreground-secondary mt-0.5">
+              Configure employee roles and seniority rankings. Superior roles automatically access subordinate documents.
             </p>
           </div>
         </div>
 
         {statusMsg && (
           <div
-            className={`p-3 rounded-lg flex items-center space-x-2 text-xs ${
+            className={`p-3.5 rounded-xl flex items-center space-x-2 text-xs ${
               statusMsg.type === "success"
-                ? "bg-emerald-950/40 border border-emerald-800/60 text-emerald-300"
-                : "bg-red-950/40 border border-red-800/60 text-red-300"
+                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                : "bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300"
             }`}
           >
             {statusMsg.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
             ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
             )}
             <span>{statusMsg.text}</span>
           </div>
         )}
 
-        {/* Hierarchy Overview Card */}
-        <div className="p-4 rounded-xl border border-[#27272a] bg-[#121214] space-y-2">
-          <div className="flex items-center space-x-2 text-xs font-semibold text-zinc-200">
-            <ArrowDownUp className="w-4 h-4 text-emerald-400" />
-            <span>Seniority Access Rules (Mathematical Guarantee)</span>
+        {/* Seniority Ladder Overview Card */}
+        <div className="p-4 rounded-xl border border-border bg-surface space-y-2.5 shadow-xs">
+          <div className="flex items-center space-x-2 text-xs font-semibold text-foreground">
+            <ArrowDownUp className="w-4 h-4 text-emerald-500" />
+            <span>Seniority Access Rules</span>
           </div>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            • <strong>Top-Down Visibility:</strong> An employee with priority <strong>P</strong> can automatically view and audit contracts uploaded by any employee with priority <strong>&le; P</strong>.<br />
-            • <strong>Bottom-Up Protection:</strong> An employee with priority <strong>&lt; P</strong> cannot view contracts uploaded by their seniors unless an explicit delegation grant is recorded.
-          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-foreground-secondary">
+            <div className="p-3 rounded-lg bg-surface-secondary border border-border space-y-1">
+              <span className="font-semibold text-foreground">Top-Down Visibility</span>
+              <p className="text-[11px] leading-relaxed">
+                Senior team members can automatically view and audit agreements created by junior colleagues.
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-surface-secondary border border-border space-y-1">
+              <span className="font-semibold text-foreground">Subordinate Protection</span>
+              <p className="text-[11px] leading-relaxed">
+                Subordinates cannot view executive documents unless an explicit delegation grant is created.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Roles Priority Configuration Table */}
-        <div className="border border-[#27272a] rounded-lg bg-[#121214] overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-[#27272a] bg-[#151518] flex items-center justify-between">
+        <div className="border border-border rounded-xl bg-surface overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-border bg-surface-secondary flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Sliders className="w-4 h-4 text-zinc-400" />
-              <h3 className="text-xs font-semibold text-zinc-100">Role Priority Ranking (1 - 100)</h3>
+              <Sliders className="w-4 h-4 text-foreground-secondary" />
+              <h3 className="text-xs font-semibold text-foreground">Role Priority Ranking (1 - 100)</h3>
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">Higher Priority = Greater Seniority</span>
+            <span className="text-[10px] text-foreground-secondary font-mono">Higher Priority = Greater Seniority</span>
           </div>
 
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-[#27272a] bg-[#101012] text-zinc-400 font-mono text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-4">Role Name</th>
-                <th className="py-3 px-4">Seniority Priority</th>
-                <th className="py-3 px-4">Description</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#27272a]">
-              {roles.map((r) => (
-                <tr key={r.id} className="hover:bg-[#18181b] transition-colors">
-                  <td className="py-3 px-4 font-medium text-zinc-200">
-                    <div className="flex items-center space-x-2">
-                      <span>{r.role_name}</span>
-                      {r.is_admin && (
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800">
-                          ADMIN
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-surface text-foreground-secondary font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Role Name</th>
+                  <th className="py-3 px-4">Seniority Priority</th>
+                  <th className="py-3 px-4">Description</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {roles.map((r) => (
+                  <tr key={r.id} className="hover:bg-surface-hover transition-colors">
+                    <td className="py-3 px-4 font-medium text-foreground">
+                      <div className="flex items-center space-x-2">
+                        <span>{r.role_name}</span>
+                        {r.is_admin && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                            ADMIN
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-mono font-semibold text-foreground">
+                      {editingRoleId === r.id ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={newPriority}
+                            onChange={(e) => setNewPriority(Number(e.target.value))}
+                            className="w-16 bg-surface-secondary border border-border rounded px-2 py-1 text-xs text-foreground font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateRole(r.id)}
+                            className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-surface-secondary text-foreground border border-border">
+                          {r.priority}
                         </span>
                       )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 font-mono font-semibold text-zinc-100">
-                    {editingRoleId === r.id ? (
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={newPriority}
-                          onChange={(e) => setNewPriority(Number(e.target.value))}
-                          className="w-16 bg-[#18181b] border border-[#27272a] rounded px-2 py-1 text-xs text-zinc-100 font-mono"
-                        />
+                    </td>
+                    <td className="py-3 px-4 text-foreground-secondary">{r.description || "—"}</td>
+                    <td className="py-3 px-4 text-right">
+                      {editingRoleId !== r.id && (
                         <button
-                          onClick={() => handleUpdateRole(r.id)}
-                          className="p-1 rounded bg-emerald-900 text-emerald-300 hover:bg-emerald-800"
+                          type="button"
+                          onClick={() => {
+                            setEditingRoleId(r.id);
+                            setNewPriority(r.priority);
+                          }}
+                          className="text-xs text-foreground-secondary hover:text-foreground font-mono underline"
                         >
-                          <Save className="w-3.5 h-3.5" />
+                          Adjust Priority
                         </button>
-                      </div>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                        {r.priority}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-zinc-400">{r.description || "—"}</td>
-                  <td className="py-3 px-4 text-right">
-                    {editingRoleId !== r.id && (
-                      <button
-                        onClick={() => {
-                          setEditingRoleId(r.id);
-                          setNewPriority(r.priority);
-                        }}
-                        className="text-xs text-zinc-400 hover:text-white font-mono underline"
-                      >
-                        Adjust Priority
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Member Assignment Table */}
-        <div className="border border-[#27272a] rounded-lg bg-[#121214] overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-[#27272a] bg-[#151518] flex items-center justify-between">
+        <div className="border border-border rounded-xl bg-surface overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-border bg-surface-secondary flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Users className="w-4 h-4 text-zinc-400" />
-              <h3 className="text-xs font-semibold text-zinc-100">Organization Employees & Role Assignments</h3>
+              <Users className="w-4 h-4 text-foreground-secondary" />
+              <h3 className="text-xs font-semibold text-foreground">Organization Employees & Role Assignments</h3>
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">Real-time Employee Scope</span>
+            <span className="text-[10px] text-foreground-secondary font-mono">{members.length} Members</span>
           </div>
 
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-[#27272a] bg-[#101012] text-zinc-400 font-mono text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-4">Employee</th>
-                <th className="py-3 px-4">Current Role</th>
-                <th className="py-3 px-4">Effective Priority</th>
-                <th className="py-3 px-4 text-right">Reassign Role</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#27272a]">
-              {members.map((m) => (
-                <tr key={m.user_id} className="hover:bg-[#18181b] transition-colors">
-                  <td className="py-3 px-4 font-medium text-zinc-200">
-                    <div>{m.name}</div>
-                    <div className="text-[11px] text-zinc-500 font-mono">{m.email}</div>
-                  </td>
-                  <td className="py-3 px-4 text-zinc-300 font-medium">{m.role_name}</td>
-                  <td className="py-3 px-4 font-mono font-semibold text-zinc-100">
-                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      Priority {m.priority}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <select
-                      value={m.role_id}
-                      onChange={(e) => handleMemberRoleChange(m.user_id, Number(e.target.value))}
-                      className="bg-[#18181b] border border-[#27272a] rounded px-2.5 py-1 text-xs text-zinc-200 font-sans focus:outline-none focus:border-zinc-500"
-                    >
-                      {roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.role_name} (Priority {r.priority})
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-surface text-foreground-secondary font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Employee</th>
+                  <th className="py-3 px-4">Current Role</th>
+                  <th className="py-3 px-4">Effective Priority</th>
+                  <th className="py-3 px-4 text-right">Reassign Role</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {members.map((m) => (
+                  <tr key={m.user_id} className="hover:bg-surface-hover transition-colors">
+                    <td className="py-3 px-4 font-medium text-foreground">
+                      <div>
+                        <div>{m.name || "Employee"}</div>
+                        <div className="text-[11px] font-mono text-foreground-secondary">{m.email}</div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-foreground">
+                      <span className="px-2 py-0.5 rounded bg-surface-secondary border border-border text-xs font-medium">
+                        {m.role_name}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono font-semibold text-foreground">
+                      P{m.priority}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <select
+                        value={m.role_id}
+                        onChange={(e) => handleMemberRoleChange(m.user_id, Number(e.target.value))}
+                        className="bg-surface-secondary border border-border rounded-lg px-2.5 py-1 text-xs text-foreground focus:outline-none focus:border-border-highlight"
+                      >
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id} className="bg-surface text-foreground">
+                            {r.role_name} (P{r.priority})
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
     </div>

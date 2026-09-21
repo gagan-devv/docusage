@@ -10,20 +10,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: "#09090b",
+        canvas: "var(--canvas)",
         surface: {
-          DEFAULT: "#121214",
-          secondary: "#151518",
-          tertiary: "#1a1a1e",
+          DEFAULT: "var(--surface)",
+          secondary: "var(--surface-secondary)",
+          tertiary: "var(--surface-tertiary)",
+          hover: "var(--surface-hover)",
         },
         card: {
-          DEFAULT: "#18181b",
-          hover: "#202024",
+          DEFAULT: "var(--card)",
+          hover: "var(--card-hover)",
         },
         border: {
-          DEFAULT: "#27272a",
-          subtle: "#1e1e22",
-          highlight: "#3f3f46",
+          DEFAULT: "var(--border)",
+          subtle: "var(--border-subtle)",
+          highlight: "var(--border-highlight)",
+        },
+        foreground: {
+          DEFAULT: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
         },
       },
       fontFamily: {
