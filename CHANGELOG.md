@@ -9,7 +9,51 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [Unreleased] - 2026-09-22 00:46:00 UTC+05:30
+## [Unreleased] - 2026-09-22 01:20:00 UTC+05:30
+
+### Added
+- **Passwordless Sign-In & Sign-Up Flows (`/login`, `/signup`)**:
+  - Reusable, dual-mode `AuthForm` component providing seamless toggle between Sign In and Create Account modes.
+  - Dedicated routes `/login` and `/signup` with custom preselected modes, email validation, and 6-digit verification code entry.
+  - Quick Persona Selector for development and demo clearance testing (Partner, Senior Counsel, Associate, Junior Analyst).
+- **Secure Global Logout Flow (`/logout`)**:
+  - Dedicated `/logout` page providing clear confirmation and countdown redirect back to `/login`.
+  - Full session revocation with API endpoint `POST /auth/logout` that invalidates active refresh tokens on the backend.
+  - Global `Navbar` logout trigger with user dropdown menu and drawer integration that flushes client state and cached session credentials.
+- **Executive Legal User Profile Workspace (`/profile`)**:
+  - Comprehensive 4-tab executive profile management suite:
+    - **Identity & Credentials**: Manage full name, legal executive title, department, contact telephone, and biography.
+    - **Jurisdictions & Clearance**: View primary tenant organization, assigned seniority rank ($P1 \dots P100$), administrative clearance badge, and multi-jurisdiction practice tags (US Federal, DE Delaware, NY New York, CA California, UK England & Wales, EU Transatlantic).
+    - **Audit & Review Preferences**: Custom toggles for auto-expanding severe covenant deviations, strict verbatim quote verification, high-risk email alerts, and default AI model provider.
+    - **Active Device Sessions**: Inspect active sessions with IP addresses, browser agents, login timestamps, and revoke individual sessions or trigger global logout.
+- **Backend Authentication & Profile APIs**:
+  - `GET /auth/profile`: Retrieve rich user profile with organization details, seniority rank, jurisdictions, and preferences.
+  - `PUT /auth/profile`: Update user profile metadata, contact info, jurisdictions, and audit preferences.
+  - `POST /auth/logout`: Revoke active refresh token session.
+  - `GET /auth/sessions`: List active login sessions and device metadata.
+  - `POST /auth/sessions/revoke`: Revoke a specific session by token family.
+  - `POST /auth/sessions/revoke-all`: Revoke all active sessions for the authenticated user.
+- **Automated Database Schema Migration (`ensure_profile_schema`)**:
+  - Added profile columns to `users` table: `title`, `department`, `phone`, `bio`, `jurisdictions` (TEXT[]), `timezone`, and `preferences` (JSONB).
+  - Updated `scripts/setup_db.sql` with default columns and executive seed profile data.
+- **Stitch MCP UI Prototype Screens**:
+  - Screen `5ce739b3` in project `7626343136948846304`: Dual-Mode Authentication Portal.
+  - Screen `c88df3c2` in project `7626343136948846304`: Legal Executive Profile Workspace.
+
+### Changed
+- **Navbar User Account Experience**: Added interactive executive avatar dropdown menu displaying current user, role badge, seniority rank ($P1 \dots P100$), direct links to Profile, Settings, and immediate Log Out.
+- **Next.js Vitest Test Setup**: Added standardized App Router mocks (`useRouter`, `usePathname`, `useSearchParams`) in `tests/setup.ts` to ensure clean testing across all component suites.
+
+### Fixed
+- Fixed Vitest router invariant error in `Navbar.tsx` by providing default navigation mocks and safe router handling.
+- Fixed `test_crag_pipeline.py` to isolate HuggingFace fallback grading from Jev System 1 fast path.
+- Verified all 72 Pytest tests passing and 3 skipped cleanly with `uv`.
+- Verified all 23 Vitest frontend unit tests passing across all 7 test files.
+- Verified all 13 Next.js routes compile and build in under 1 second.
+
+---
+
+## [0.2.0] - 2026-09-22 00:46:00 UTC+05:30
 
 ### Added
 - **Bright Mode & Dark Mode Theming**: Full dual-theme architecture powered by CSS custom properties and Stitch design tokens (`Academic Precision` / `IEEE SANKALP` light palette and `Titanium and Zinc` dark palette).

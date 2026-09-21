@@ -459,7 +459,7 @@ erDiagram
 
 | Table | Primary Key | Foreign Keys | Key Columns & Constraints | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| `users` | `id UUID` | None | `email UNIQUE`, `name`, `avatar_url`, `is_active` | User identity registry |
+| `users` | `id UUID` | None | `email UNIQUE`, `name`, `title`, `department`, `phone`, `bio`, `jurisdictions TEXT[]`, `timezone`, `preferences JSONB`, `avatar_url`, `is_active` | User identity & executive profile registry |
 | `organizations` | `id UUID` | `owner_id -> users(id)` | `name`, `slug UNIQUE`, `created_at` | Multi-tenant organization boundaries |
 | `organization_roles` | `id SERIAL` | `org_id -> organizations(id)` | `role_name`, `priority INT CHECK (1-100)`, `is_admin`, `UNIQUE(org_id, role_name)` | Dynamic seniority rankings per tenant |
 | `organization_members` | `id SERIAL` | `org_id`, `user_id`, `role_id` | `custom_priority_override INT CHECK (1-100)`, `UNIQUE(org_id, user_id)` | Employee membership & seniority overrides |
@@ -524,4 +524,22 @@ The frontend implements a multi-device responsive design system targeting mobile
 All developers and agent workflows modifying this repository must adhere to the following maintenance protocol:
 1. **`CHANGELOG.md` Updates**: Any commit must append an entry with the exact date and time (including timezone offset) categorizing changes under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, or `Security`.
 2. **`README.md` & `ARCHITECTURE.md` Synchronization**: Architectural updates, new routes, and feature enhancements must be updated synchronously to prevent documentation drift.
+
+### 10.3 Authentication, Profile Workspace & Session Lifecycle Architecture 👤
+The authentication and user management system is architected around passwordless verification, fine-grained profile telemetry, and explicit session revocation:
+- **Dual-Mode Auth Portal (`/login`, `/signup`)**:
+  - Encapsulated within `AuthForm.tsx`, supporting fluid client-side switching between sign-in and account creation modes.
+  - Generates 6-digit email OTPs stored hashed in `auth_otp_codes` with 10-minute expiry and rate limiting.
+  - Issues 30-minute Access JWTs and 7-day Refresh JWTs with rotating family tracking.
+- **Global Logout & Device Session Invalidation (`/logout`)**:
+  - `POST /auth/logout` sets `is_revoked = TRUE` on the active refresh token family.
+  - Multi-device management (`GET /auth/sessions`, `POST /auth/sessions/revoke`, `POST /auth/sessions/revoke-all`) allows users to monitor active device sessions and terminate sessions remotely.
+  - Dedicated `/logout` route clears client-side tokens and storage, providing an automated 3-second redirect back to `/login`.
+- **Executive Legal Profile Workspace (`/profile`)**:
+  - Multi-tabbed executive dashboard organized into four distinct operational panes:
+    1. **Identity & Credentials**: Name, legal title, department, telephone, and biography.
+    2. **Jurisdictions & Clearance**: Visualized seniority badge ($P1 \dots P100$), administrative clearance status, and jurisdictional tags (Delaware, New York, California, UK, EU).
+    3. **Audit & Review Preferences**: Custom toggles for auto-expanding deviations, strict quote verification, email notifications, and default AI model provider.
+    4. **Active Sessions**: Monitored active devices with browser/IP diagnostics and per-device or global revocation actions.
+
 

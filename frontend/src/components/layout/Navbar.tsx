@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { SettingsModal } from "../settings/SettingsModal";
@@ -19,6 +19,9 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
+  LogOut,
+  Award,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -27,10 +30,13 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
   const pathname = usePathname();
+  const router = useRouter();
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api
@@ -58,10 +64,32 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
     }
   }, []);
 
-  // Close mobile drawer on route change
+  // Close menus on outside click or route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsUserMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    setIsUserMenuOpen(false);
+    setIsMobileMenuOpen(false);
+    try {
+      await api.logout();
+    } catch {
+      // Ignore API logout failure, still redirect to logout page
+    }
+    router.push("/logout");
+  };
 
   const navLinks = [
     { href: "/", label: "Dashboard", icon: Activity },
@@ -119,20 +147,79 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
 
         {/* Action Controls */}
         <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* User Persona & Seniority Pill (Desktop) */}
-          {user && (
+          {/* User Persona & Seniority Dropdown (Desktop) */}
+          {user ? (
+            <div className="relative hidden xl:block" ref={userMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center space-x-2 px-2.5 py-1 rounded-full bg-surface-secondary border border-border hover:border-border-highlight text-xs transition-colors"
+                aria-expanded={isUserMenuOpen}
+                aria-label="User account menu"
+              >
+                <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
+                  {user.name ? user.name[0].toUpperCase() : "U"}
+                </div>
+                <span className="font-medium text-foreground truncate max-w-[120px]">
+                  {user.name ? user.name.split(" ")[0] : "Counsel"}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface text-amber-600 dark:text-amber-400 border border-border">
+                  P{user.priority} • {user.role}
+                </span>
+                <ChevronDown className={`w-3 h-3 text-foreground-muted transition-transform ${isUserMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-60 rounded-xl bg-surface border border-border shadow-xl py-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3.5 py-2.5 border-b border-border">
+                    <div className="font-semibold text-foreground truncate">{user.name}</div>
+                    <div className="text-[11px] font-mono text-foreground-secondary truncate">{user.email}</div>
+                    <div className="mt-1.5 inline-flex items-center space-x-1 text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <Award className="w-3 h-3" />
+                      <span>Clearance P{user.priority} • {user.role}</span>
+                    </div>
+                  </div>
+
+                  <div className="py-1">
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center space-x-2 px-3.5 py-2 hover:bg-surface-secondary text-foreground transition-colors"
+                    >
+                      <User className="w-3.5 h-3.5 text-foreground-secondary" />
+                      <span>Executive Profile & Clearance</span>
+                    </Link>
+
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center space-x-2 px-3.5 py-2 hover:bg-surface-secondary text-foreground transition-colors"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-foreground-secondary" />
+                      <span>AI Providers & Credentials</span>
+                    </Link>
+                  </div>
+
+                  <div className="pt-1 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full flex items-center space-x-2 px-3.5 py-2 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-left transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Log Out Session</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
             <Link
               href="/login"
-              className="hidden xl:flex items-center space-x-2 px-2.5 py-1 rounded-full bg-surface-secondary border border-border hover:border-border-highlight text-xs transition-colors"
-              title="Switch user persona or log in"
+              className="hidden xl:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface-secondary border border-border hover:bg-surface-tertiary text-xs font-medium text-foreground transition-colors"
             >
               <User className="w-3.5 h-3.5 text-foreground-secondary" />
-              <span className="font-medium text-foreground truncate max-w-[120px]">
-                {user.name ? user.name.split(" ")[0] : user.email ? user.email.split("@")[0] : "Counsel"}
-              </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface text-amber-600 dark:text-amber-400 border border-border">
-                P{user.priority} • {user.role}
-              </span>
+              <span>Sign In</span>
             </Link>
           )}
 
@@ -222,20 +309,47 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenUpload }) => {
               })}
             </nav>
 
-            {/* User Profile & Theme Footer */}
+            {/* User Profile & Logout Footer */}
             <div className="pt-4 border-t border-border space-y-3">
-              {user && (
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-secondary border border-border">
-                  <div className="flex items-center space-x-2 truncate">
-                    <User className="w-4 h-4 text-foreground-secondary shrink-0" />
-                    <div className="truncate">
-                      <div className="text-xs font-medium text-foreground truncate">{user.name || user.email}</div>
-                      <div className="text-[10px] font-mono text-foreground-secondary">
-                        {user.role} • Priority {user.priority}
+              {user ? (
+                <div className="space-y-2">
+                  <Link
+                    href="/profile"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-surface-secondary border border-border hover:border-border-highlight transition-colors"
+                  >
+                    <div className="flex items-center space-x-2.5 truncate">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                        {user.name ? user.name[0].toUpperCase() : "U"}
+                      </div>
+                      <div className="truncate text-left">
+                        <div className="text-xs font-semibold text-foreground truncate">{user.name || user.email}</div>
+                        <div className="text-[10px] font-mono text-foreground-secondary">
+                          {user.role} • Priority P{user.priority}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                    <ChevronRight className="w-4 h-4 text-foreground-muted shrink-0" />
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-lg border border-border hover:border-rose-500/30 hover:bg-rose-500/10 text-foreground-secondary hover:text-rose-600 text-xs font-medium transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Log Out Session</span>
+                  </button>
                 </div>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full py-2 px-3 rounded-lg bg-foreground text-canvas font-medium text-xs flex items-center justify-center space-x-2 shadow-xs"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Sign In / Register</span>
+                </Link>
               )}
 
               <div className="flex items-center justify-between pt-1">

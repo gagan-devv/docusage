@@ -10,7 +10,7 @@
 [![Resend](https://img.shields.io/badge/Resend-Email_OTP_Delivery-black.svg)](https://resend.com)
 [![Celery](https://img.shields.io/badge/Celery-5.3-37814A.svg?logo=celery&logoColor=white)](https://docs.celeryq.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose_Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
-[![Tests](https://img.shields.io/badge/Tests-67_Pytest_%26_18_Vitest_Passing-brightgreen.svg)](#testing--verification)
+[![Tests](https://img.shields.io/badge/Tests-72_Pytest_%26_23_Vitest_Passing-brightgreen.svg)](#testing--verification)
 
 ---
 
@@ -276,13 +276,19 @@ cp .env.example .env
 
 All requests modifying or accessing documents, policies, and settings require an `Authorization: Bearer <access_token>` header unless explicitly noted.
 
-### 1. Authentication (`/auth`)
+### 1. Authentication & Profile (`/auth`)
 | Method | Endpoint | Auth Required | Description |
 |---|---|---|---|
 | `POST` | `/auth/otp/request` | No | Dispatches a 6-digit OTP to user's email via Resend |
-| `POST` | `/auth/otp/verify` | No | Validates OTP and issues 30-min Access Token & 7-day Refresh Token |
+| `POST` | `/auth/otp/verify` | No | Validates OTP, handles sign-up metadata, and issues 30-min Access Token & 7-day Refresh Token |
 | `POST` | `/auth/refresh` | No | Exchanges refresh token for new token pair with family rotation |
+| `POST` | `/auth/logout` | Yes (User) | Invalidates active refresh token session on the backend |
 | `GET` | `/auth/me` | Yes (User) | Returns current user profile, organization role, and seniority priority |
+| `GET` | `/auth/profile` | Yes (User) | Fetches complete executive profile, jurisdictions, and audit preferences |
+| `PUT` | `/auth/profile` | Yes (User) | Updates user profile metadata, department, phone, bio, and preferences |
+| `GET` | `/auth/sessions` | Yes (User) | Lists active login sessions, IP addresses, and user agent metadata |
+| `POST` | `/auth/sessions/revoke` | Yes (User) | Revokes a specific device session by token family ID |
+| `POST` | `/auth/sessions/revoke-all` | Yes (User) | Terminates all active sessions across all devices |
 
 ### 2. Organization Administration & RBAC (`/admin`)
 | Method | Endpoint | Auth Required | Description |
@@ -341,22 +347,22 @@ All requests modifying or accessing documents, policies, and settings require an
 The codebase maintains comprehensive test suites covering unit logic, property-based invariants, security guards, and frontend workflows:
 
 ```bash
-# 1. Run all backend test suites (67 tests)
-.venv/bin/python -m pytest backend/tests/ -v
+# 1. Run all backend test suites using uv (72 passing, 3 skipped)
+uv run pytest backend/tests/ -v
 
 # 2. Run property-based invariant suites (Hypothesis)
-.venv/bin/python -m pytest backend/tests/test_properties.py backend/tests/test_rbac_properties.py -v
+uv run pytest backend/tests/test_properties.py backend/tests/test_rbac_properties.py -v
 
 # 3. Run security & settings test suite (SSRF, AES-256, Auth guards)
-.venv/bin/python -m pytest backend/tests/test_security_and_settings.py -v
+uv run pytest backend/tests/test_security_and_settings.py -v
 
 # 4. Run export resilience suite (ReportLab XML injection)
-.venv/bin/python -m pytest backend/tests/test_export.py -v
+uv run pytest backend/tests/test_export.py -v
 
-# 5. Run frontend Vitest test suites (18 tests)
+# 5. Run frontend Vitest test suites (23 tests across 7 suites)
 cd frontend && npm test -- --run
 
-# 6. Run Next.js production build verification
+# 6. Run Next.js production build verification (13 routes compiled)
 cd frontend && npm run build
 ```
 

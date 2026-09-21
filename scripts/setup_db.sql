@@ -5,6 +5,13 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
+    title VARCHAR(255),
+    department VARCHAR(255),
+    phone VARCHAR(50),
+    bio TEXT,
+    jurisdictions JSONB DEFAULT '[]'::jsonb,
+    timezone VARCHAR(100) DEFAULT 'UTC',
+    preferences JSONB DEFAULT '{}'::jsonb,
     avatar_url TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW()

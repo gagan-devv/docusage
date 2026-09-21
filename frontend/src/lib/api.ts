@@ -13,6 +13,9 @@ import {
   OrgRole,
   OrgMember,
   AccessGrant,
+  UserProfile,
+  UserSessionItem,
+  ProfileUpdateRequest,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -67,10 +70,14 @@ export const api = {
     });
   },
 
-  async verifyOtp(email: string, code: string): Promise<AuthResponse> {
+  async verifyOtp(
+    email: string,
+    code: string,
+    extra?: { name?: string; title?: string; department?: string }
+  ): Promise<AuthResponse> {
     const res = await fetchJson<AuthResponse>("/auth/otp/verify", {
       method: "POST",
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({ email, code, ...(extra || {}) }),
     });
     if (typeof window !== "undefined" && res.access_token) {
       localStorage.setItem("docusage_token", res.access_token);
@@ -97,11 +104,64 @@ export const api = {
     return fetchJson("/auth/me");
   },
 
-  logout(): void {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("docusage_token");
-      localStorage.removeItem("docusage_refresh_token");
-      localStorage.removeItem("docusage_user");
+  async getProfile(): Promise<UserProfile> {
+    const res = await fetchJson<{ profile: UserProfile }>("/auth/profile");
+    return res.profile;
+  },
+
+  async updateProfile(payload: ProfileUpdateRequest): Promise<UserProfile> {
+    const res = await fetchJson<{ profile: UserProfile }>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    if (typeof window !== "undefined" && res.profile) {
+      const currentUser = localStorage.getItem("docusage_user");
+      if (currentUser) {
+        try {
+          const parsed = JSON.parse(currentUser);
+          parsed.name = res.profile.name;
+          localStorage.setItem("docusage_user", JSON.stringify(parsed));
+        } catch {}
+      }
+    }
+    return res.profile;
+  },
+
+  async getSessions(): Promise<UserSessionItem[]> {
+    const res = await fetchJson<{ sessions: UserSessionItem[] }>("/auth/sessions");
+    return res.sessions || [];
+  },
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await fetchJson("/auth/sessions/revoke", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+  },
+
+  async revokeAllSessions(): Promise<void> {
+    await fetchJson("/auth/sessions/revoke-all", {
+      method: "POST",
+    });
+  },
+
+  async logout(): Promise<void> {
+    const refreshToken = typeof window !== "undefined" ? localStorage.getItem("docusage_refresh_token") : null;
+    try {
+      if (refreshToken) {
+        await fetchJson("/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      }
+    } catch {
+      // Graceful local cleanup if API is unreachable
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("docusage_token");
+        localStorage.removeItem("docusage_refresh_token");
+        localStorage.removeItem("docusage_user");
+      }
     }
   },
 

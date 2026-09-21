@@ -24,7 +24,8 @@ async def test_crag_grader_correct_when_chunks_match():
         {"id": 2, "text": "Section 8.3: Neither party shall be liable for indirect or punitive damages."}
     ]
 
-    with patch("src.backend.app.services.crag.hf_service.generate_json", new_callable=AsyncMock) as mock_hf:
+    with patch("src.backend.app.services.crag._grade_with_jev", new_callable=AsyncMock, return_value=None), \
+         patch("src.backend.app.services.crag.hf_service.generate_json", new_callable=AsyncMock) as mock_hf:
         mock_hf.return_value = {
             "rule_name": "Limitation of Liability Cap",
             "retrieval_grade": "CORRECT",

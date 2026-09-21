@@ -168,3 +168,55 @@ def test_send_otp_email_fallback_when_unconfigured(monkeypatch):
     assert res["status"] == "logged"
     assert res["provider"] == "local"
 
+@pytest.mark.skipif(not is_db_connected(), reason="PostgreSQL database service not reachable")
+@pytest.mark.anyio
+async def test_user_profile_and_session_management():
+    from src.backend.app.services.auth import (
+        fetch_user_full_profile,
+        save_user_profile,
+        list_user_sessions,
+        revoke_user_sessions,
+    )
+    email = "executive_counsel@docusage.ai"
+    req = await request_email_otp(email=email)
+    auth_res = await verify_email_otp(
+        email,
+        req["dev_otp"],
+        name="Eleanor Vance",
+        title="Partner & General Counsel",
+        department="Strategic M&A and Regulatory"
+    )
+    user_id = auth_res["user"]["id"]
+
+    # 1. Fetch Profile
+    profile = await fetch_user_full_profile(user_id)
+    assert profile["email"] == email
+    assert profile["name"] == "Eleanor Vance"
+    assert profile["title"] == "Partner & General Counsel"
+    assert profile["department"] == "Strategic M&A and Regulatory"
+    assert "jurisdictions" in profile
+    assert "preferences" in profile
+
+    # 2. Update Profile
+    updated = await save_user_profile(user_id, {
+        "bio": "Specializing in antitrust and high-stakes cross-border mergers.",
+        "phone": "+1 (555) 019-2834",
+        "jurisdictions": ["Delaware", "New York", "London (Solicitor)"],
+        "preferences": {"risk_tolerance": "strict", "alert_high_risk": True}
+    })
+    assert updated["bio"] == "Specializing in antitrust and high-stakes cross-border mergers."
+    assert updated["phone"] == "+1 (555) 019-2834"
+    assert "London (Solicitor)" in updated["jurisdictions"]
+    assert updated["preferences"]["risk_tolerance"] == "strict"
+
+    # 3. List & Revoke Sessions
+    sessions = await list_user_sessions(user_id)
+    assert len(sessions) >= 1
+    assert any(s["is_current"] for s in sessions)
+
+    await revoke_user_sessions(user_id, auth_res["refresh_token"])
+    # After revocation, token cannot be refreshed
+    with pytest.raises(ValueError, match="Refresh token expired or compromised"):
+        await refresh_user_tokens(auth_res["refresh_token"])
+
+

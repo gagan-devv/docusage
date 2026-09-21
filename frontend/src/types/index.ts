@@ -185,3 +185,55 @@ export interface AccessGrant {
   expires_at?: string | null;
   granted_at: string;
 }
+
+export interface UserPreferences {
+  default_policy_id?: number | null;
+  risk_tolerance?: "strict" | "conservative" | "moderate" | "permissive";
+  alert_high_risk?: boolean;
+  alert_delegation?: boolean;
+  weekly_digest?: boolean;
+  compact_mode?: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  title?: string;
+  department?: string;
+  phone?: string;
+  bio?: string;
+  jurisdictions?: string[];
+  timezone?: string;
+  avatar_url?: string;
+  org_id: string;
+  org_name?: string;
+  role_name: string;
+  priority: number;
+  is_admin: boolean;
+  preferences: UserPreferences;
+  created_at?: string;
+  active_sessions_count?: number;
+}
+
+export interface UserSessionItem {
+  id: string;
+  device_info: string;
+  ip_address: string;
+  last_active: string;
+  expires_at?: string;
+  is_current: boolean;
+}
+
+export interface ProfileUpdateRequest {
+  name?: string;
+  title?: string;
+  department?: string;
+  phone?: string;
+  bio?: string;
+  jurisdictions?: string[];
+  timezone?: string;
+  preferences?: UserPreferences;
+  avatar_url?: string;
+}
+

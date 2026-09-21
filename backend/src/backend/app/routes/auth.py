@@ -1,7 +1,16 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, EmailStr
-from typing import Optional, Dict, Any
-from src.backend.app.services.auth import request_email_otp, verify_email_otp, refresh_user_tokens
+from typing import Optional, Dict, Any, List
+from src.backend.app.services.auth import (
+    request_email_otp,
+    verify_email_otp,
+    refresh_user_tokens,
+    fetch_user_full_profile,
+    save_user_profile,
+    revoke_user_sessions,
+    list_user_sessions,
+    revoke_single_session,
+)
 from src.backend.app.services.rbac import CurrentUser, check_contract_access
 from src.backend.app.utils.jwt import decode_token
 
@@ -14,9 +23,29 @@ class OTPRequest(BaseModel):
 class OTPVerify(BaseModel):
     email: str
     code: str
+    name: Optional[str] = None
+    title: Optional[str] = None
+    department: Optional[str] = None
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    jurisdictions: Optional[List[str]] = None
+    timezone: Optional[str] = None
+    preferences: Optional[Dict[str, Any]] = None
+    avatar_url: Optional[str] = None
+
+class RevokeSessionRequest(BaseModel):
+    session_id: str
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> CurrentUser:
     if not authorization or not authorization.startswith("Bearer "):
@@ -66,7 +95,13 @@ async def send_otp(payload: OTPRequest):
 @router.post("/otp/verify")
 async def verify_otp(payload: OTPVerify):
     try:
-        res = await verify_email_otp(email=payload.email, otp_code=payload.code)
+        res = await verify_email_otp(
+            email=payload.email,
+            otp_code=payload.code,
+            name=payload.name,
+            title=payload.title,
+            department=payload.department,
+        )
         return res
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -83,6 +118,15 @@ async def refresh_tokens(payload: RefreshRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/logout")
+async def logout(payload: Optional[LogoutRequest] = None, user: CurrentUser = Depends(get_current_user)):
+    try:
+        token = payload.refresh_token if payload else None
+        await revoke_user_sessions(user.id, token)
+        return {"message": "Session terminated and refresh tokens revoked."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/me")
 async def get_me(user: CurrentUser = Depends(get_current_user)):
     return {
@@ -96,3 +140,48 @@ async def get_me(user: CurrentUser = Depends(get_current_user)):
             "is_admin": user.is_admin,
         }
     }
+
+@router.get("/profile")
+async def get_profile(user: CurrentUser = Depends(get_current_user)):
+    try:
+        profile = await fetch_user_full_profile(user.id)
+        return {"profile": profile}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/profile")
+async def update_profile(payload: ProfileUpdateRequest, user: CurrentUser = Depends(get_current_user)):
+    try:
+        data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
+        updated = await save_user_profile(user.id, data)
+        return {"profile": updated}
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sessions")
+async def get_sessions(user: CurrentUser = Depends(get_current_user)):
+    try:
+        sessions = await list_user_sessions(user.id)
+        return {"sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sessions/revoke")
+async def revoke_session(payload: RevokeSessionRequest, user: CurrentUser = Depends(get_current_user)):
+    try:
+        await revoke_single_session(user.id, payload.session_id)
+        return {"message": "Session revoked."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sessions/revoke-all")
+async def revoke_all_sessions(user: CurrentUser = Depends(get_current_user)):
+    try:
+        await revoke_user_sessions(user.id)
+        return {"message": "All sessions revoked."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
