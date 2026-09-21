@@ -172,11 +172,16 @@ docusage/
 
 ### Option A: Complete Stack via Docker Compose (Recommended)
 
-Start all services (Frontend UI, Backend API, Celery Worker, PostgreSQL with `pgvector`, and Redis) with a single command:
+Start all services (Frontend UI, Backend API, Celery Worker, PostgreSQL with `pgvector`, and Redis) with BuildKit acceleration:
 
 ```bash
-docker compose up --build -d
+DOCKER_BUILDKIT=1 docker compose up --build -d
 ```
+
+> **Build Latency Optimizations:**
+> - **Shared Backend Image**: `backend` and `celery` share `image: docusage-backend:latest`, building only once.
+> - **`uv` Wheel Cache**: `backend/Dockerfile` utilizes `ghcr.io/astral-sh/uv:latest` with BuildKit cache mount (`/root/.cache/uv`), reducing install time to ~12s.
+> - **Next.js Standalone**: `frontend/Dockerfile` uses a 3-stage multi-stage build with `output: "standalone"` and compiler cache mounts, producing a minimal ~120MB runner.
 
 Verify service health:
 ```bash

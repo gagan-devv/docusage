@@ -1,5 +1,6 @@
 services:
   backend:
+    image: docusage-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -17,12 +18,13 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   celery:
+    image: docusage-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -33,12 +35,15 @@ services:
       - ./data:/app/data
       - ./backend/src:/app/src
     depends_on:
+      backend:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
 
   frontend:
+    image: docusage-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -49,7 +54,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   postgres:
     image: ankane/pgvector:latest
@@ -64,8 +70,8 @@ services:
       - ./scripts/setup_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docusage} -d ${POSTGRES_DB:-docusage}"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
 
   redis:
@@ -74,8 +80,8 @@ services:
       - "${REDIS_PORT_HOST:-6380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
 
 volumes:

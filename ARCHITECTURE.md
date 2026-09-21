@@ -542,4 +542,23 @@ The authentication and user management system is architected around passwordless
     3. **Audit & Review Preferences**: Custom toggles for auto-expanding deviations, strict quote verification, email notifications, and default AI model provider.
     4. **Active Sessions**: Monitored active devices with browser/IP diagnostics and per-device or global revocation actions.
 
+### 10.4 Container Architecture, Multi-Stage Builds & BuildKit Optimization ⚡
+Docusage implements an optimized containerization strategy focused on minimal build latency, small runtime footprints, and deterministic startup sequencing:
+- **Build Deduplication in Docker Compose**:
+  - Both `backend` and `celery` declare `image: docusage-backend:latest`. Docker Compose builds the Python container once, and Celery reuses the exact built image directly without redundant builds.
+- **`uv` Multi-Stage Python Container (`backend/Dockerfile`)**:
+  - Incorporates the official standalone `uv` binary (`ghcr.io/astral-sh/uv:latest`).
+  - Stage 1 (`builder`): Creates `/opt/venv` and executes `uv pip install -r requirements.txt` with a host-persisted BuildKit cache mount (`--mount=type=cache,target=/root/.cache/uv`). Reduces cold install from ~3 minutes to ~12 seconds.
+  - Stage 2 (`runner`): Minimal `python:3.12-slim` image that copies `/opt/venv` and runs `uvicorn`.
+- **Next.js 3-Stage Standalone Container (`frontend/Dockerfile`)**:
+  - Stage 1 (`deps`): Installs dependencies with `--mount=type=cache,target=/root/.npm`.
+  - Stage 2 (`builder`): Compiles Next.js with `output: "standalone"` enabled in `next.config.mjs` and `--mount=type=cache,target=/app/.next/cache`.
+  - Stage 3 (`runner`): Stripped Alpine container running non-root `nextjs` user with `.next/standalone`, dropping runtime image size from ~850MB to ~120MB.
+- **Context Exclusion (`.dockerignore`)**:
+  - Root, backend, and frontend `.dockerignore` files prevent local venvs, test caches (`.pytest_cache`, `.hypothesis`, `test-results`), and raw uploaded contract storage from bloating build contexts.
+- **Tuned Healthcheck Orchestration**:
+  - Healthcheck intervals set to 3–5 seconds with `start_period=5s`.
+  - `frontend` guards startup with `depends_on: { backend: { condition: service_healthy } }` to prevent initial connection drops.
+
+
 

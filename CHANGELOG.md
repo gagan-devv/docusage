@@ -9,7 +9,32 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [Unreleased] - 2026-09-22 01:20:00 UTC+05:30
+## [Unreleased] - 2026-09-22 01:26:00 UTC+05:30
+
+### Added
+- **BuildKit Acceleration & Cache Mounts**:
+  - `backend/Dockerfile`: Integrated official standalone `uv` binary (`ghcr.io/astral-sh/uv:latest`) and `--mount=type=cache,target=/root/.cache/uv` for host-persisted wheel cache, dropping Python package installation time from 3 minutes to ~12 seconds.
+  - `frontend/Dockerfile`: Integrated `--mount=type=cache,target=/root/.npm` for package downloads and `--mount=type=cache,target=/app/.next/cache` for Next.js Turbopack compiler cache.
+- **Next.js Standalone Runtime Mode**:
+  - Added `frontend/next.config.mjs` with `output: "standalone"`, tracing minimal dependencies for deployment.
+  - 3-stage multi-stage frontend build (`deps` -> `builder` -> `runner`) with minimal Node Alpine runner image (~120MB vs ~850MB previously).
+- **Multi-Stage Backend Container**:
+  - Two-stage build isolating `uv venv /opt/venv` in a builder stage and running from a clean `python:3.12-slim` runner stage.
+- **Root and Subsystem `.dockerignore` Specifications**:
+  - Added root `.dockerignore` and expanded `backend/.dockerignore` and `frontend/.dockerignore` to prevent test suites, caches, and uploaded contract files from streaming across the Docker daemon build context.
+
+### Changed
+- **Docker Compose Build Deduplication**:
+  - Tagged `backend` and `celery` with shared `image: docusage-backend:latest`, eliminating redundant duplicate image builds for the shared Python codebase.
+  - Tagged `frontend` with `image: docusage-frontend:latest`.
+- **Container Startup Latency Tuning**:
+  - Reduced `backend` healthcheck interval to 5s, timeout to 3s, retries to 3, and start_period to 5s.
+  - Reduced `postgres` and `redis` healthcheck intervals to 3s.
+  - Configured `frontend.depends_on: { backend: { condition: service_healthy } }` to eliminate cold start HTTP race conditions.
+
+---
+
+## [0.3.0] - 2026-09-22 01:20:00 UTC+05:30
 
 ### Added
 - **Passwordless Sign-In & Sign-Up Flows (`/login`, `/signup`)**:

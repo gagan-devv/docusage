@@ -1,5 +1,9 @@
 node_modules
 .next
 test-results
+tests/
 .git
 .env*.local
+*.log
+npm-debug.log*
+.DS_Store
