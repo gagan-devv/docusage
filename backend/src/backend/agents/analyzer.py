@@ -248,9 +248,18 @@ def auditor_node(state: ContractAnalysisState) -> Dict[str, Any]:
 
 
 def should_require_human_review(state: ContractAnalysisState) -> str:
-    """Routing condition: check if risk exceeds auto-approval threshold."""
+    """Routing condition: check if risk exceeds auto-approval threshold with calibrated confidence."""
     max_iter = state.get("max_iterations", 3)
-    if state.get("risk_score", 0.0) > 0.3 and state.get("iteration_count", 0) <= max_iter:
+    if state.get("iteration_count", 0) > max_iter:
+        return "finalize"
+
+    # Route to human review if overall risk score exceeds threshold or if any high-risk deviation has calibrated confidence >= 0.75
+    deviations = state.get("deviations", [])
+    has_high_risk_deviation = any(
+        d.get("risk") == "HIGH" and d.get("confidence_score", 0.0) >= 0.75
+        for d in deviations
+    )
+    if state.get("risk_score", 0.0) > 0.3 or has_high_risk_deviation:
         return "human_review"
     return "finalize"
 

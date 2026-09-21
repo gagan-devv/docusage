@@ -2,7 +2,9 @@ import json
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional
+import httpx
 from pydantic import BaseModel, Field
+from src.backend.app.config import settings
 from src.backend.app.services.llm import hf_service
 
 logger = logging.getLogger("docusage.crag")
@@ -82,6 +84,87 @@ Respond ONLY with a JSON object in this format:
 """
 
 
+
+async def _grade_with_jev(
+    rule_name: str,
+    rule_query: str,
+    chunks: List[Dict[str, Any]]
+) -> Optional[CRAGEvaluationResult]:
+    """Fast-path System 1 grading via TypeSafe Jev single forward pass."""
+    if not settings.enable_jev_grader:
+        return None
+
+    api_key = settings.typesafe_api_key.get_secret_value() if settings.typesafe_api_key else ""
+    if not api_key:
+        return None
+
+    # Ponytail: bound payload per chunk to 1200 chars to avoid payload inflation
+    formatted_context = "\n\n".join([
+        f"[Chunk {i}]: {str(c.get('text', ''))[:1200]}"
+        for i, c in enumerate(chunks)
+    ])
+
+    payload = {
+        "state": {
+            "rule_name": rule_name,
+            "rule_query": rule_query,
+            "contract_chunks": formatted_context
+        },
+        "model": "jev-latest",
+        "questions": {
+            "retrieval_grade": {
+                "type": "choice",
+                "instructions": f"Evaluate if the contract chunks contain substantive clauses matching the policy covenant rule '{rule_name}'.",
+                "criteria": {
+                    "CORRECT": "Directly contains relevant contractual clauses matching the rule query.",
+                    "AMBIGUOUS": "Contains peripheral or partial context, but lacks complete covenant terms.",
+                    "INCORRECT": "Completely irrelevant to the covenant rule (preamble, unrelated clauses, letters)."
+                }
+            }
+        }
+    }
+
+    # Security audit: HTTPS validation and strict 1.5s timeout
+    base_url = settings.typesafe_base_url.rstrip("/")
+    if not base_url.startswith("https://") and not base_url.startswith("http://localhost") and not base_url.startswith("http://127.0.0.1"):
+        logger.warning(f"Rejecting non-https Jev base URL: {base_url}")
+        return None
+
+    endpoint = f"{base_url}/systemone" if not base_url.endswith("/systemone") else base_url
+
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.post(
+                endpoint,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                answer = data.get("answers", {}).get("retrieval_grade") or data.get("choices", {}).get("retrieval_grade", {})
+                grade = str(answer.get("choice", "CORRECT")).upper()
+                if grade not in ("CORRECT", "AMBIGUOUS", "INCORRECT"):
+                    grade = "CORRECT"
+
+                conf = float(answer.get("confidence") if answer.get("confidence") is not None else answer.get("probability", 0.9))
+                conf = min(1.0, max(0.1, conf))
+                relevant_indices = [] if grade == "INCORRECT" else list(range(len(chunks)))
+
+                return CRAGEvaluationResult(
+                    rule_name=rule_name,
+                    retrieval_grade=grade,
+                    confidence=conf,
+                    relevant_chunk_indices=relevant_indices,
+                    reasoning=f"System 1 Jev decision: {grade} (calibrated confidence: {conf:.2f})"
+                )
+            else:
+                logger.warning(f"Jev API returned status {resp.status_code}, falling back to LLM")
+    except Exception as e:
+        logger.warning(f"Jev grading request failed ({e}), falling back to LLM")
+
+    return None
+
+
 async def grade_retrieval_quality(
     rule: Dict[str, Any],
     chunks: List[Dict[str, Any]]
@@ -98,6 +181,11 @@ async def grade_retrieval_quality(
             relevant_chunk_indices=[],
             reasoning="No chunks were retrieved from the document store."
         )
+
+    # 1. Fast path: Attempt Jev System 1 classification
+    jev_result = await _grade_with_jev(rule_name, rule_query, chunks)
+    if jev_result is not None:
+        return jev_result
 
     formatted_chunks = "\n\n".join([
         f"[CHUNK {i}] (ID: {c.get('id', i)}):\n{c.get('text', '')}"

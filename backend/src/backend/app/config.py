@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, SecretStr
 
 class Settings(BaseSettings):
     db_user: str = Field(default="docusage", validation_alias="POSTGRES_USER")
@@ -21,9 +21,12 @@ class Settings(BaseSettings):
     resend_from_email: str = Field(default="Docusage Security <onboarding@resend.dev>", validation_alias="RESEND_FROM_EMAIL")
     enable_multi_vector: bool = Field(default=True, validation_alias="ENABLE_MULTI_VECTOR")
     enable_reranker: bool = Field(default=False, validation_alias="ENABLE_RERANKER")
+    typesafe_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="TYPESAFE_API_KEY")
+    typesafe_base_url: str = Field(default="https://api.typesafe.ai/v1", validation_alias="TYPESAFE_BASE_URL")
+    enable_jev_grader: bool = Field(default=True, validation_alias="ENABLE_JEV_GRADER")
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
